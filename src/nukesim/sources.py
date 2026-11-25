@@ -86,6 +86,31 @@ SOURCES: dict[str, Source] = {
         url="https://www.cetus.ucsd.edu/docs/publications/SohnJASA2000.pdf",
         notes="Measured booms decay to ambient by 40-50 m depth; flat-interface theory agrees.",
     ),
+    "fletcher1962": Source(
+        key="fletcher1962",
+        citation=(
+            "Fletcher, E. R., Albright, R. W., Perret, R. F. D., Franklin, M. E., Bowen, I. G. & "
+            "White, C. S. (1962/63). Nuclear Bomb Effects Computer (Including Slide-rule Design and "
+            "Curve Fits for Weapons Effects). USAEC CEX-62.2, Lovelace Foundation."
+        ),
+        url=(
+            "https://www.deepspace.ucsb.edu/wp-content/uploads/2025/10/"
+            "NUCLEAR-BOMB-EFFECTS-COMPUTER-incl-slide-rule-and-functional-fits-Fletcher-et-al-1963.pdf"
+        ),
+        notes=(
+            "Sec. 2.6, Eqs. 2.114-2.115 (p.41, checked against page image); p.43 surface-burst "
+            "rule. Based on the 1962 edition of Glasstone."
+        ),
+    ),
+    "removal_xs_water": Source(
+        key="removal_xs_water",
+        citation=(
+            "Fast-neutron removal cross section of water, Sigma_R = 0.103 1/cm (fission spectrum; "
+            "ORNL removal method, NBS Handbook 63). Seen in two secondary sources (McMaster J. Eng. "
+            "Phys. article; EPJ Web Conf. TESNAT 2017 paper 01022) via search snippets only."
+        ),
+        notes="NOT read in an original source. The weakest-sourced number in Section 3.",
+    ),
 }
 
 

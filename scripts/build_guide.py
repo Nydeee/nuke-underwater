@@ -18,6 +18,7 @@ import typst
 
 from nukesim.effects import air_blast as ab
 from nukesim.effects import air_to_water as aw
+from nukesim.effects import initial_radiation as ir
 from nukesim.effects import underwater_shock as us
 from nukesim.scenario import Burst, Environment, Receiver
 
@@ -158,9 +159,33 @@ def fig_water_map():
     save(fig, "water_map.png")
 
 
+def fig_surface_dose():
+    r = np.linspace(300, 4000, 300)
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    for y in (1, 20, 100, 1000):
+        ax.semilogy(r, [ir.incident_dose(y, 500, x).total_gy for x in r], label=f"{y:g} kt")
+    ax.axhline(1, c="gray", ls=":")
+    ax.set(xlabel="slant distance from the burst (m)", ylabel="initial dose at surface (Gy)", ylim=(1e-3, 1e4),
+           title="Initial radiation reaching the water surface")
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+    save(fig, "surface_dose.png")
+
+
+def fig_radiation_map():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("prw", ROOT / "scripts" / "plot_radiation_water.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fig = mod.plot(Burst(yield_kt=20, z_m=500))
+    save(fig, "radiation_map.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
-              fig_surface_overpressure, fig_trace_speed, fig_water_map):
+              fig_surface_overpressure, fig_trace_speed, fig_water_map,
+              fig_surface_dose, fig_radiation_map):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))
