@@ -14,5 +14,6 @@
 #include "ch06_biology_immediate.typ"
 #include "ch07_biology_long_term.typ"
 #include "ch08_surface_bursts.typ"
+#include "ch09_using_the_app.typ"
 #include "glossary.typ"
 #include "references.typ"

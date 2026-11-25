@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nukesim · Nuclear burst on water</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": {
+        "three": "./vendor/three/three.module.min.js",
+        "three/addons/": "./vendor/three/addons/"
+    } }
+  </script>
+</head>
+<body>
+  <aside id="controls">
+    <h1>nukesim</h1>
+    <p class="sub">Nuclear burst on water · local simulator</p>
+
+    <section>
+      <h2>Burst</h2>
+      <label>Yield
+        <span class="row"><input id="yield" type="number" min="0.001" step="any" value="20">
+          <select id="yieldUnit"><option value="1">kt</option><option value="1000">Mt</option></select></span>
+      </label>
+      <label>Position
+        <span class="row"><select id="side"><option value="above">above the water</option><option value="below">below the water</option></select>
+          <input id="burstDist" type="number" min="0" step="any" value="500"><span class="unit">m</span></span>
+      </label>
+      <label>Fission share <span class="row"><input id="fission" type="number" min="1" max="100" value="100"><span class="unit">%</span></span></label>
+      <label>Wind (for fallout) <span class="row"><input id="wind" type="number" min="1" max="100" value="15"><span class="unit">mph</span></span></label>
+    </section>
+
+    <section>
+      <h2>Sea</h2>
+      <label class="check"><input id="deepOcean" type="checkbox" checked> Deep open ocean</label>
+      <label>Water depth <span class="row"><input id="waterDepth" type="number" min="1" value="200" disabled><span class="unit">m</span></span></label>
+    </section>
+
+    <section>
+      <h2>Add something to the sea</h2>
+      <div class="buttons">
+        <button data-add="fish">🐟 Fish</button>
+        <button data-add="whale">🐋 Whale</button>
+        <button data-add="dolphin">🐬 Dolphin</button>
+        <button data-add="turtle">🐢 Turtle</button>
+        <button data-add="diver">🤿 Diver</button>
+        <button data-add="boat">🚤 Person on a boat</button>
+      </div>
+      <p class="hint">Drag them in the 3D view along the cut-away (distance and depth).</p>
+      <ul id="receiverList"></ul>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <label>Distance shown <span class="row"><input id="maxRange" type="number" min="0.1" step="any" value="3"><span class="unit">km</span></span></label>
+      <label>Depth shown <span class="row"><input id="maxDepth" type="number" min="1" value="100"><span class="unit">m</span></span></label>
+      <label>Height of the water view (vs. distance) <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>
+      <label>Overlay on the cut-away
+        <select id="overlay">
+          <option value="none">none</option>
+          <option value="pressure">peak water pressure</option>
+          <option value="dose">initial radiation dose</option>
+          <option value="zones">danger zones for…</option>
+        </select>
+      </label>
+      <label id="zonesKindLabel" hidden>Danger zones for
+        <select id="zonesKind"><option value="fish">fish</option><option value="mammal">marine mammal</option><option value="turtle">turtle</option><option value="diver">diver</option></select>
+      </label>
+      <button id="computeOverlay">Compute overlay</button>
+      <div id="legend"></div>
+    </section>
+  </aside>
+
+  <main>
+    <div id="scene"></div>
+    <div id="status">Loading…</div>
+    <div id="burstInfo"></div>
+  </main>
+
+  <aside id="results">
+    <h2>Results</h2>
+    <p class="hint">Click something in the sea to see what happens to it.</p>
+    <div id="report"></div>
+    <h3>Waves</h3>
+    <canvas id="waveChart" width="360" height="200"></canvas>
+    <p id="waveInfo" class="hint"></p>
+    <h3>Fallout over 30 days (selected)</h3>
+    <canvas id="falloutChart" width="360" height="200"></canvas>
+    <p id="falloutInfo" class="hint"></p>
+  </aside>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

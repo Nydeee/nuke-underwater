@@ -5,6 +5,14 @@ effects on the water itself and on fish, humans, ships and other "receivers" you
 anywhere in the scene. Every number in the code traces back to a published source
 (`src/nukesim/sources.py`).
 
+## The 3D interface
+```bash
+uv run nukesim-web
+```
+Opens a local 3D interface in your browser (http://127.0.0.1:8000): set up a burst, drag fish, whales,
+divers and boats into the sea, and see what happens to each one, with sources and caveats.
+Runs only on your computer.
+
 ## Getting started
 ```bash
 uv sync                      # install dependencies into .venv
@@ -35,7 +43,7 @@ Underwater bursts are an optional mode.
 6. ✅ 6a Immediate effects on fish, marine mammals, turtles, divers, people on deck (`biology/`)
    ✅ 6b Fallout radiation over weeks and radioactive uptake into fish (`biology/uptake.py`, `biology/long_term.py`)
 7. ✅ Low and surface bursts: direct shock coupling, crater, waves and shoaling (`effects/near_surface_shock.py`, `effects/water_waves.py`)
-8. Web UI with 3D placement
+8. ✅ Local 3D web interface (`web/`, `uv run nukesim-web`)
 9. Uncertainty bands everywhere
 
 Physics explanations live in `docs/physics/`.

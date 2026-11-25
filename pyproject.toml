@@ -7,10 +7,16 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "matplotlib>=3.8",
+    "fastapi>=0.165.0",
+    "uvicorn>=0.54.0",
 ]
+
+[project.scripts]
+nukesim-web = "nukesim.web.server:main"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pypdfium2>=5.15.2",
     "pytest>=8",
     "typst>=0.15.2",
@@ -25,3 +31,4 @@ packages = ["src/nukesim"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

@@ -33,3 +33,4 @@
 - U.S. Navy (2016). _U.S. Navy Diving Manual_, Revision 7.
 - Yelverton, J. T. et al. (1975). _The relationship between fish size and their response to underwater blast._ DNA 3677T.
 - Yelverton, J. T. & Richmond, D. R. (1981). Underwater explosion damage risk criteria for fish, birds, and mammals. _J. Acoust. Soc. Am._ 70, S84.
+- three.js (version 0.160), MIT licence: the 3D library used by the interface. threejs.org.
