@@ -1,22 +1,29 @@
-"""Small local web server: the browser interface asks it for results, it calls the
-existing (tested) simulator code and sends back numbers. Runs only on this Mac
-(127.0.0.1); nothing is sent to the internet.
+"""Small web server: the browser interface asks it for results, it calls the
+existing (tested) simulator code and sends back numbers.
 
-Start with:  uv run nukesim-web
+On your Mac:   uv run nukesim-web      (only this Mac can reach it: 127.0.0.1)
+As a website:  see docs/DEPLOY.md      (the Dockerfile runs uvicorn on 0.0.0.0:$PORT)
+
+Limits on request sizes, per-visitor rate limits and safe error messages are here and in
+protect.py, so the same code is safe to put on the public internet.
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 import math
 import webbrowser
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .. import units
 from ..biology.assess import LEVELS, assess
@@ -27,32 +34,45 @@ from ..effects import (air_blast, air_to_water, fallout, near_surface_shock, rad
                        underwater_shock, water_waves)
 from ..scenario import Burst, Environment, Receiver
 from ..timeline import timeline as build_timeline
+from .protect import ProtectMiddleware
 
 STATIC = Path(__file__).parent / "static"
+log = logging.getLogger("nukesim.web")
+
+# ---------------------------------------------------------------- request limits
+# Chosen so the app's own requests fit easily, while one request can't keep the server busy for long.
+# (Measured on a laptop: an uncertainty run costs about 0.8 ms per sample per receiver; a "zones"
+# overlay about 0.5 ms per grid cell.)
+MAX_RECEIVERS = 50              # animals, people and ships in one request
+MAX_SAMPLES_TOTAL = 10_000      # uncertainty runs x receivers in one /api/assess request
+MAX_GRID_CELLS = 64 * 40        # overlay cells (nr x nd); the app asks for 48 x 30
+MAX_DAYS = 365                  # fallout / timeline length
+MAX_RANGE_M = 10_000_000.0      # 10,000 km
+MAX_COORD_M = 10_000_000.0
 
 
 # ---------------------------------------------------------------- input models
 class BurstIn(BaseModel):
     yield_kt: float = Field(20.0, gt=0, le=100_000, description="kilotons")
-    z_m: float = Field(500.0, description="height above the water (negative = depth below)")
+    z_m: float = Field(500.0, ge=-20_000, le=100_000, description="height above the water (negative = depth below)")
     fission_fraction: float = Field(1.0, gt=0, le=1)
     wind_mph: float = Field(15.0, gt=0, le=100)
 
 
 class EnvIn(BaseModel):
-    water_depth_m: float | None = Field(None, gt=0, description="None = deep open ocean")
+    water_depth_m: float | None = Field(None, gt=0, le=20_000, description="None = deep open ocean")
     visibility: Literal["exceptionally_clear", "very_clear", "clear", "light_haze", "medium_haze", "thin_fog"] = "exceptionally_clear"
     overcast: bool = False
     night: bool = False
 
 
 class ReceiverIn(BaseModel):
-    id: str
+    id: str = Field(max_length=100)
     kind: Literal["fish", "mammal", "turtle", "diver", "person", "ship"]
-    x_m: float
-    y_m: float = 0.0
-    z_m: float
-    mass_kg: float | None = Field(None, gt=0)
+    x_m: float = Field(ge=-MAX_COORD_M, le=MAX_COORD_M)
+    y_m: float = Field(0.0, ge=-MAX_COORD_M, le=MAX_COORD_M)
+    z_m: float = Field(ge=-20_000, le=100_000)
+    mass_kg: float | None = Field(None, gt=0, le=1_000_000)
     swim_bladder: bool = True
     hearing_group: Literal["LF", "HF", "VHF", "PW", "OW"] | None = None
     ship_type: Literal["small_craft", "destroyer", "carrier"] | None = None
@@ -64,34 +84,49 @@ class Scenario(BaseModel):
 
 
 class AssessIn(Scenario):
-    receivers: list[ReceiverIn] = []
+    receivers: list[ReceiverIn] = Field([], max_length=MAX_RECEIVERS)
     long_term: bool = True
     uncertainty: bool = False
     n_samples: int = Field(200, ge=20, le=2000)
+
+    @model_validator(mode="after")
+    def _uncertainty_budget(self):
+        if self.uncertainty and self.n_samples * len(self.receivers) > MAX_SAMPLES_TOTAL:
+            most = max(20, MAX_SAMPLES_TOTAL // max(len(self.receivers), 1))
+            raise ValueError(f"too much work for one request: {self.n_samples} uncertainty runs x {len(self.receivers)} "
+                             f"receivers is over {MAX_SAMPLES_TOTAL:,}. Use at most {most} runs, or fewer receivers.")
+        return self
 
 
 class FieldIn(Scenario):
     kind: Literal["pressure", "dose", "zones"] = "pressure"
     zones_kind: Literal["fish", "mammal", "turtle", "diver"] = "fish"
-    zones_mass_kg: float | None = None
-    max_range_m: float = Field(3000.0, gt=0)
-    max_depth_m: float = Field(100.0, gt=0)
+    zones_mass_kg: float | None = Field(None, gt=0, le=1_000_000)
+    max_range_m: float = Field(3000.0, gt=0, le=MAX_RANGE_M)
+    max_depth_m: float = Field(100.0, gt=0, le=20_000)
     nr: int = Field(40, ge=4, le=120)
     nd: int = Field(25, ge=4, le=80)
 
+    @model_validator(mode="after")
+    def _grid_budget(self):
+        if self.nr * self.nd > MAX_GRID_CELLS:
+            raise ValueError(f"overlay grid too fine: {self.nr} x {self.nd} = {self.nr * self.nd:,} cells, "
+                             f"the most is {MAX_GRID_CELLS:,}")
+        return self
+
 
 class RangeIn(Scenario):
-    max_range_m: float = Field(100_000.0, gt=0)
+    max_range_m: float = Field(100_000.0, gt=0, le=MAX_RANGE_M)
 
 
 class FalloutIn(Scenario):
     receiver: ReceiverIn
-    days: float = Field(30.0, gt=0, le=365)
+    days: float = Field(30.0, gt=0, le=MAX_DAYS)
 
 
 class TimelineIn(Scenario):
-    receivers: list[ReceiverIn] = []
-    days: float = Field(30.0, gt=0, le=365)
+    receivers: list[ReceiverIn] = Field([], max_length=MAX_RECEIVERS)
+    days: float = Field(30.0, gt=0, le=MAX_DAYS)
 
 
 # ---------------------------------------------------------------- helpers
@@ -156,7 +191,35 @@ def peak_water_pressure_pa(b: Burst, r: Receiver, env: Environment) -> float:
 
 
 # ---------------------------------------------------------------- app
-app = FastAPI(title="nukesim", description="Local interface to the nuclear-blast-on-water simulator")
+app = FastAPI(title="nukesim", description="Interface to the nuclear-blast-on-water simulator")
+
+
+@app.get("/healthz")
+def healthz():
+    """For the hosting service: answers quickly so it knows the server is up (no calculation)."""
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------- errors: short messages, never Python internals
+@app.exception_handler(RequestValidationError)
+async def _bad_input(request: Request, exc: RequestValidationError):
+    """Say what was wrong with the input (field and reason) without echoing the input back."""
+    detail = []
+    for e in exc.errors()[:20]:
+        loc = list(e.get("loc", []))
+        if len(loc) <= 1:                       # a whole-request check (e.g. too much work), not one field
+            loc.append("limits")
+        msg = str(e.get("msg", "invalid value")).removeprefix("Value error, ")[:300]
+        detail.append({"loc": loc, "msg": msg, "type": e.get("type")})
+    return JSONResponse({"detail": detail}, status_code=422)
+
+
+@app.exception_handler(Exception)
+async def _unexpected(request: Request, exc: Exception):
+    """Anything unexpected: log the details for the owner, tell the visitor only that it failed."""
+    log.error("error while handling %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse({"detail": "The server could not calculate this scenario (an internal error). "
+                                   "Try different settings."}, status_code=500)
 
 
 @app.post("/api/info")
@@ -296,15 +359,29 @@ def timeline_series(tl: TimelineIn):
 
 
 @app.middleware("http")
-async def _no_stale_files(request, call_next):
-    """Make the browser check for a newer copy of the page's files every time (they change as the app is
-    developed; with heuristic caching the browser can keep running old JavaScript after an update)."""
+async def _caching_and_headers(request, call_next):
+    """Caching (see docs/DEPLOY.md, "How caching works"):
+    * the app's own files (HTML, JS, CSS): "no-cache" = the browser must ask "has this changed?" every time.
+      The answer is a tiny "304 not modified" when it hasn't (the files carry an ETag), so this is cheap,
+      and an update to the site shows up on the very next page load.
+    * vendor/ (three.js, which only changes when we upgrade it): kept for a day without asking.
+    * API answers: never stored (they depend on the scenario sent)."""
     response = await call_next(request)
-    if not request.url.path.startswith("/api/"):
+    path = request.url.path
+    if path.startswith("/api/") or path == "/healthz":
+        response.headers["Cache-Control"] = "no-store"
+    elif path.startswith("/vendor/"):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    else:
         response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     return response
 
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)   # smaller downloads (three.js: about 670 kB -> 165 kB)
+app.add_middleware(ProtectMiddleware)                    # outermost: rate limit / busy / size checks first
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
 
@@ -313,13 +390,15 @@ def main():
 
     ap = argparse.ArgumentParser(description="Start the local nukesim web interface.")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="127.0.0.1 = only this computer (default); 0.0.0.0 = anyone on the network")
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
     url = f"http://127.0.0.1:{a.port}"
     print(f"nukesim interface running at {url}  (press Ctrl+C to stop)")
     if not a.no_browser:
         webbrowser.open(url)
-    uvicorn.run(app, host="127.0.0.1", port=a.port, log_level="warning")
+    uvicorn.run(app, host=a.host, port=a.port, log_level="warning")
 
 
 if __name__ == "__main__":

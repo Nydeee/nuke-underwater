@@ -1,0 +1,15 @@
+# Render "Blueprint": tells Render how to run this repository as a website (see docs/DEPLOY.md).
+# Render reads this file when you choose New > Blueprint and pick this repository.
+services:
+  - type: web
+    name: nukesim
+    runtime: docker            # build from the Dockerfile in this folder
+    plan: free                 # free: sleeps after 15 min without visitors. "starter" ($7/month) stays awake.
+    region: frankfurt          # pick the one closest to most visitors: oregon, ohio, virginia, frankfurt, singapore
+    healthCheckPath: /healthz
+    autoDeploy: true           # every push to the main branch on GitHub updates the site
+    envVars:
+      - key: NUKESIM_RATE_PER_MIN    # requests per visitor per minute (the overlay counts as 6, assess as 2)
+        value: "180"
+      - key: NUKESIM_MAX_BUSY        # calculations at the same moment before "busy, try again"
+        value: "8"

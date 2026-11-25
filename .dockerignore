@@ -1,0 +1,12 @@
+# Only what the image needs goes in: pyproject.toml, uv.lock and src/
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.DS_Store
+output
+docs
+tests
+scripts
+.claude
