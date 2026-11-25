@@ -12,6 +12,7 @@ uv run pytest                # run the test suite
 uv run python scripts/plot_air_blast_water.py --yield-kt 20 --height-m 500
 uv run python scripts/plot_radiation_water.py --yield-kt 20 --height-m 500
 uv run python scripts/plot_fallout_sea.py --yield-kt 1000 --height-m 0 --x-km 50
+uv run python scripts/plot_thermal_water.py --yield-kt 1000 --height-m 2000 --range-km 3
 uv run python scripts/plot_shock.py --yield-kt 20 --burst-depth-m 27 --range-m 1000
 ```
 
@@ -27,7 +28,7 @@ Underwater bursts are an optional mode.
 2. ✅ Air blast over water and into the water (`effects/air_blast.py`, `effects/air_to_water.py`)
 3. ✅ Initial radiation into water (`effects/initial_radiation.py`, `effects/radiation_shielding.py`)
 4. ✅ Fallout on the sea and radioactive seawater (`effects/fallout.py`, `effects/sea_contamination.py`)
-5. Thermal effects on the water surface
+5. ✅ Thermal radiation on the sea: heating, boiling, burns on deck (`effects/thermal.py`, `effects/thermal_water.py`)
 6. Biological effects: fish, marine mammals, humans
 7. Low and surface bursts: direct shock into the water when the fireball touches it, crater, waves (plus bubble/surface phenomena for underwater bursts)
 8. Web UI with 3D placement

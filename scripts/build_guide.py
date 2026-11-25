@@ -205,10 +205,20 @@ def fig_fallout_sea():
     save(mod.plot(Burst(yield_kt=1000, z_m=0)), "fallout_sea.png")
 
 
+def fig_thermal_water():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("ptw", ROOT / "scripts" / "plot_thermal_water.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fig, _, _ = mod.plot(1000, 2000, 3.0)
+    save(fig, "thermal_water.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
               fig_surface_overpressure, fig_trace_speed, fig_water_map,
-              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea):
+              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))

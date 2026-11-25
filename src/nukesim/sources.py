@@ -98,8 +98,8 @@ SOURCES: dict[str, Source] = {
             "NUCLEAR-BOMB-EFFECTS-COMPUTER-incl-slide-rule-and-functional-fits-Fletcher-et-al-1963.pdf"
         ),
         notes=(
-            "Sec. 2.6, Eqs. 2.114-2.115 (p.41, checked against page image); p.43 surface-burst "
-            "rule. Based on the 1962 edition of Glasstone."
+            "Sec. 2.6, Eqs. 2.114-2.115 (p.41); Table 2.11 thermal Eqs. 2.106-2.113 (p.36); both "
+            "checked against page images. p.43 surface-burst rule. Based on the 1962 edition of Glasstone."
         ),
     ),
     "removal_xs_water": Source(
@@ -123,6 +123,30 @@ SOURCES: dict[str, Source] = {
             "60 m mixing depth; activity sank from 10-20 m to the thermocline at 3-4 m/h and stayed "
             "roughly uniform above it for >= 2 days. Read via OCR text."
         ),
+    ),
+    "mobley_fresnel": Source(
+        key="mobley_fresnel",
+        citation="Mobley, C. D. Ocean Optics Web Book: Fresnel Equations (Eqs. 5-6).",
+        url="https://www.oceanopticsbook.info/view/surfaces/level-surfaces/fresnel-equations",
+    ),
+    "segelstein1981": Source(
+        key="segelstein1981",
+        citation="Segelstein, D. J. (1981). The complex refractive index of water. M.S. thesis, Univ. Missouri-Kansas City.",
+        url="https://omlc.org/spectra/water/data/segelstein81.txt",
+    ),
+    "popefry1997": Source(
+        key="popefry1997",
+        citation="Pope, R. M. & Fry, E. S. (1997). Absorption spectrum (380-700 nm) of pure water. II. Appl. Opt. 36, 8710-8723.",
+        url="https://omlc.org/spectra/water/data/pope97.txt",
+    ),
+    "sharqawy2010": Source(
+        key="sharqawy2010",
+        citation=(
+            "Sharqawy, M. H., Lienhard, J. H. & Zubair, S. M. (2010). Thermophysical properties of "
+            "seawater: a review of existing correlations and data. Desalination and Water Treatment 16, 354-380."
+        ),
+        url="http://web.mit.edu/lienhard/www/papers/journal/Thermophysical_properties_of_seawater-DWT-16-354-2010.pdf",
+        notes="Eq. 9 specific heat (3999 J/kg/K at 20 C, S=35 g/kg); Eq. 54 latent heat of vaporization.",
     ),
 }
 

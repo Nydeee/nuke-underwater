@@ -10,5 +10,6 @@
 #include "ch02_air_blast_into_water.typ"
 #include "ch03_radiation_into_water.typ"
 #include "ch04_fallout_and_sea.typ"
+#include "ch05_thermal.typ"
 #include "glossary.typ"
 #include "references.typ"
