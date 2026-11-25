@@ -12,5 +12,6 @@
 #include "ch04_fallout_and_sea.typ"
 #include "ch05_thermal.typ"
 #include "ch06_biology_immediate.typ"
+#include "ch07_biology_long_term.typ"
 #include "glossary.typ"
 #include "references.typ"

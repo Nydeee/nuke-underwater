@@ -237,6 +237,46 @@ SOURCES: dict[str, Source] = {
         url="https://icrp.org/docs/RAP_Report(C1to8)draft_Dec2007a.pdf",
         notes="Juvenile marine fish LD50/30 10.5-55.5 Gy; plaice embryo LD50 0.9 Gy.",
     ),
+    "jeff311": Source(
+        key="jeff311",
+        citation=(
+            "JEFF-3.1.1 cumulative fission yields and ENSDF half-lives, via IAEA Nuclear Data Services "
+            "LiveChart API (retrieved 2026-11-25)."
+        ),
+        url="https://nds.iaea.org/relnsd/vcharthtml/api_v0_guide.html",
+        notes="Fast-fission cumulative yields for U-235, Pu-239 and U-238.",
+    ),
+    "trs422": Source(
+        key="trs422",
+        citation=(
+            "IAEA (2004). Sediment Distribution Coefficients and Concentration Factors for Biota in the "
+            "Marine Environment. Technical Reports Series No. 422. Table III (fish)."
+        ),
+        url="https://projects.itrcweb.org/contseds-bioavailability/References/TRS422_web.pdf",
+        notes="Recommended CF (Bq/kg wet fish per Bq/L seawater); uncertain by up to 10x either way (sec. 3.3).",
+    ),
+    "icrp136_draft": Source(
+        key="icrp136_draft",
+        citation=(
+            "ICRP Task Group 74 (2016). Dose coefficients for non-human biota environmentally exposed to "
+            "radiation. Draft for public consultation (became ICRP Publication 136), Annex B tables."
+        ),
+        url="https://icrp.org/docs/TG74DraftForPublicConsultation(4July2016).pdf",
+        notes=(
+            "Reference Flatfish internal (uGy/h per Bq/kg) and external (uGy/h per Bq/L) DCs. "
+            "Consultation draft marked 'do not reference'; final ICRP 136 values should be checked."
+        ),
+    ),
+    "fish_benchmarks": Source(
+        key="fish_benchmarks",
+        citation=(
+            "Dose-rate benchmarks for fish: ICRP Publication 108 Derived Consideration Reference Level "
+            "(1-10 mGy/d); ERICA screening value 10 uGy/h; UNSCEAR 1996 (400 uGy/h, no population effects); "
+            "UNSCEAR 2008 Annex E (100-1000 uGy/h, reduced fertility in fish). As summarised in ENSI "
+            "expert report ENSI33/606 (2018), Tables 2-3."
+        ),
+        url="https://ensi.admin.ch/en/wp-content/uploads/sites/5/2019/07/Expertenbericht_ENSI33_606.pdf",
+    ),
 }
 
 

@@ -6,11 +6,15 @@
 - U.S. Army Corps of Engineers (1991). _Underwater Blast Monitoring._ Engineer Technical Letter ETL 1110-8-11(FR), 15 July 1991.
 - CDC. _Acute Radiation Syndrome: Information for Clinicians._
 - Continental Shelf Associates (2004). _Explosive removal of offshore structures._ MMS OCS Study 2003-070.
+- ENSI (2018). Expert report ENSI33/606 (summary of ICRP and UNSCEAR dose-rate benchmarks for biota).
 - Fletcher, E. R. et al. (1962). _Nuclear Bomb Effects Computer (Including Slide-rule Design and Curve Fits for Weapons Effects)._ USAEC report CEX-62.2.
 - Friedlander, F. G. (1946). The diffraction of sound pulses. I. _Proc. R. Soc. Lond. A_ 186, 322--344.
 - JASCO Applied Sciences (2022). _Sunrise Wind UXO acoustic modelling report_, v4.4.
 - Lance, R. M. et al. (2015). Human injury criteria for underwater blasts. _PLoS ONE_ 10(11): e0143485.
 - Minnaert, M. (1933). On musical air-bubbles and the sounds of running water. _Phil. Mag._ 16, 235--248.
+- IAEA (2004). _Sediment Distribution Coefficients and Concentration Factors for Biota in the Marine Environment._ Technical Reports Series No. 422.
+- ICRP (2016). _Dose coefficients for non-human biota environmentally exposed to radiation_, draft for consultation (Publication 136).
+- JEFF-3.1.1 evaluated fission yields, via IAEA Nuclear Data Services.
 - Mobley, C. D. _Ocean Optics Web Book_: Fresnel Equations. oceanopticsbook.info.
 - NMFS (2023). _Summary of Endangered Species Act Acoustic Thresholds._
 - NMFS (2025). Proposed rule, _Federal Register_ 90 FR 32118 (U.S. Navy Phase 4 criteria).

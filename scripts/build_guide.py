@@ -225,10 +225,20 @@ def fig_zones():
     save(mod.plot(Burst(20, 500), "fish", mass_kg=0.3), "zones_fish.png")
 
 
+def fig_long_term():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("plt_lt", ROOT / "scripts" / "plot_long_term.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fig, _ = mod.plot(Burst(1000, 0))
+    save(fig, "long_term_fish.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
               fig_surface_overpressure, fig_trace_speed, fig_water_map,
-              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water, fig_zones):
+              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water, fig_zones, fig_long_term):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))
