@@ -4,13 +4,25 @@
 - Cole, R. H. (1948). _Underwater Explosions._ Princeton University Press.
 - Glasstone, S. & Dolan, P. J. (1977). _The Effects of Nuclear Weapons_, 3rd edition. U.S. Department of Defense and Energy Research and Development Administration. Online: #link("https://atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter6.html")[atomicarchive.com].
 - U.S. Army Corps of Engineers (1991). _Underwater Blast Monitoring._ Engineer Technical Letter ETL 1110-8-11(FR), 15 July 1991.
+- CDC. _Acute Radiation Syndrome: Information for Clinicians._
+- Continental Shelf Associates (2004). _Explosive removal of offshore structures._ MMS OCS Study 2003-070.
 - Fletcher, E. R. et al. (1962). _Nuclear Bomb Effects Computer (Including Slide-rule Design and Curve Fits for Weapons Effects)._ USAEC report CEX-62.2.
 - Friedlander, F. G. (1946). The diffraction of sound pulses. I. _Proc. R. Soc. Lond. A_ 186, 322--344.
+- JASCO Applied Sciences (2022). _Sunrise Wind UXO acoustic modelling report_, v4.4.
+- Lance, R. M. et al. (2015). Human injury criteria for underwater blasts. _PLoS ONE_ 10(11): e0143485.
+- Minnaert, M. (1933). On musical air-bubbles and the sounds of running water. _Phil. Mag._ 16, 235--248.
 - Mobley, C. D. _Ocean Optics Web Book_: Fresnel Equations. oceanopticsbook.info.
+- NMFS (2023). _Summary of Endangered Species Act Acoustic Thresholds._
+- NMFS (2025). Proposed rule, _Federal Register_ 90 FR 32118 (U.S. Navy Phase 4 criteria).
 - Operation Redwing (1956). _Military Effects Summary Report_ (ADA995132); Triffet, T. & LaRiviere, P. D., _Characterization of Fallout_, WT-1317.
+- Popper, A. N. et al. (2014). _Sound Exposure Guidelines for Fishes and Sea Turtles._ ASA S3/SC1.4 TR-2014.
 - Pope, R. M. & Fry, E. S. (1997). Absorption spectrum (380--700 nm) of pure water. II. _Appl. Opt._ 36, 8710--8723.
+- Strom, D. J. (2003). _Health Impacts from Acute Radiation Exposure._ PNNL-14424.
 - Sawyers, K. N. (1968). Underwater sound pressure from sonic booms. _J. Acoust. Soc. Am._ 44, 523--524.
 - Sohn, R. A., Vernon, F., Hildebrand, J. A. & Webb, S. C. (2000). Field measurements of sonic boom penetration into the ocean. _J. Acoust. Soc. Am._ 107, 3073--3083.
 - Sparrow, V. W. (1995). The effect of aircraft speed on the penetration of sonic boom noise into a flat ocean. NASA N95-14887.
 - Segelstein, D. J. (1981). _The complex refractive index of water._ M.S. thesis, University of Missouri--Kansas City.
 - Sharqawy, M. H., Lienhard, J. H. & Zubair, S. M. (2010). Thermophysical properties of seawater: a review of existing correlations and data. _Desalination and Water Treatment_ 16, 354--380.
+- U.S. Navy (2016). _U.S. Navy Diving Manual_, Revision 7.
+- Yelverton, J. T. et al. (1975). _The relationship between fish size and their response to underwater blast._ DNA 3677T.
+- Yelverton, J. T. & Richmond, D. R. (1981). Underwater explosion damage risk criteria for fish, birds, and mammals. _J. Acoust. Soc. Am._ 70, S84.

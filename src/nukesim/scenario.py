@@ -65,7 +65,7 @@ class Environment:
 class Receiver:
     """Something placed in the scenario: a fish, a human, a ship hull, a gauge...
 
-    kind : free-text label, e.g. "fish", "human", "gauge".
+    kind : "fish", "mammal", "turtle", "diver", "person" (on deck/boat), or "gauge".
     """
 
     x_m: float
@@ -73,6 +73,10 @@ class Receiver:
     z_m: float
     kind: str = "gauge"
     label: str = ""
+    # Body properties used by the biology models (Section 6). Ignored by the physics models.
+    mass_kg: float | None = None         # body mass
+    swim_bladder: bool = True            # fish: has a gas-filled swim bladder
+    hearing_group: str | None = None     # marine mammals: "LF", "HF", "VHF", "PW", "OW"
 
     @property
     def depth_m(self) -> float:

@@ -215,10 +215,20 @@ def fig_thermal_water():
     save(fig, "thermal_water.png")
 
 
+def fig_zones():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pez", ROOT / "scripts" / "plot_effects_zones.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    save(mod.plot(Burst(20, -27), "mammal", mass_kg=200), "zones_mammal.png")
+    save(mod.plot(Burst(20, 500), "fish", mass_kg=0.3), "zones_fish.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
               fig_surface_overpressure, fig_trace_speed, fig_water_map,
-              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water):
+              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water, fig_zones):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))

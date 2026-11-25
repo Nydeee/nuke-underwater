@@ -148,6 +148,95 @@ SOURCES: dict[str, Source] = {
         url="http://web.mit.edu/lienhard/www/papers/journal/Thermophysical_properties_of_seawater-DWT-16-354-2010.pdf",
         notes="Eq. 9 specific heat (3999 J/kg/K at 20 C, S=35 g/kg); Eq. 54 latent heat of vaporization.",
     ),
+    "navy_phase4": Source(
+        key="navy_phase4",
+        citation=(
+            "U.S. Department of the Navy criteria for explosives (Phase 4), as published in "
+            "NMFS proposed rule, 90 FR 32118 (16 July 2025), Tables 19-20; earlier Phase III "
+            "(DoN 2017) 50% values via BSEE OCS PEIS Appendix D (2023) Table D-5."
+        ),
+        url="https://www.govinfo.gov/content/pkg/FR-2025-07-16/html/2025-13258.htm",
+        notes="Modified Goertner lung-injury impulse equations; 237/243 dB GI tract; hearing TTS/PTS peaks.",
+    ),
+    "jasco_uxo": Source(
+        key="jasco_uxo",
+        citation="JASCO Applied Sciences, Sunrise Wind UXO acoustic modelling report v4.4, Sec. 6.2 (NOAA-hosted, 2022).",
+        url="https://media.fisheries.noaa.gov/2022-06/SunriseWind_2022App_UXOAcousticModeling_OPR1_508.pdf",
+        notes="Impulse window: surface-reflection arrival or 20% of lung oscillation period; worked thresholds Table 7.",
+    ),
+    "csa2004": Source(
+        key="csa2004",
+        citation="Continental Shelf Associates (2004). Explosive removal of offshore structures. MMS OCS Study 2003-070, Sec. 4.3.5.",
+        url="https://espis.boem.gov/final%20reports/3042.pdf",
+        notes="Goertner lung model: lung volume 3% of mass (litres per kg x 0.03), V(z) = V0 * 10/(z+10).",
+    ),
+    "minnaert1933": Source(
+        key="minnaert1933",
+        citation="Minnaert, M. (1933). On musical air-bubbles and the sounds of running water. Phil. Mag. 16, 235-248.",
+        notes="Resonance frequency of a gas bubble: f = (1/(2 pi a)) sqrt(3 gamma P / rho).",
+    ),
+    "popper2014": Source(
+        key="popper2014",
+        citation=(
+            "Popper, A. N. et al. (2014). Sound Exposure Guidelines for Fishes and Sea Turtles. "
+            "ASA S3/SC1.4 TR-2014, Springer. Table 7.2 (explosions)."
+        ),
+        url="https://tethys.pnnl.gov/sites/default/files/publications/Popper_et_al_Sound_Exposure_Guidelines_for_Fishes_and_Sea_Turtles.pdf",
+    ),
+    "nmfs2023": Source(
+        key="nmfs2023",
+        citation="NMFS (2023). Summary of Endangered Species Act Acoustic Thresholds (FHWG 2008 fish criteria).",
+        url="https://www.fisheries.noaa.gov/s3/2023-02/ESA%20all%20species%20threshold%20summary_508_OPR1.pdf",
+    ),
+    "yelverton1975": Source(
+        key="yelverton1975",
+        citation=(
+            "Yelverton, J. T. et al. (1975). The relationship between fish size and their response to "
+            "underwater blast. Lovelace Foundation, DNA 3677T. (Abstract only: LD50 1.7 psi-ms for 0.02 g "
+            "guppy fry to 49.5 psi-ms for 744 g carp.)"
+        ),
+        url="https://usrd.iogp.org/resource/the-relationships-between-fish-size-and-their-response-to-underwater-blast/",
+    ),
+    "usn_diving_manual": Source(
+        key="usn_diving_manual",
+        citation="U.S. Navy Diving Manual, Revision 7 (2016), Sec. 2-7.3.6 to 2-7.3.8 and 3-12.6.",
+        url="https://researchcompliance.asu.edu/wp-content/uploads/sites/50/2024/06/US-DIVING-MANUAL_REV7.pdf",
+    ),
+    "lance2015": Source(
+        key="lance2015",
+        citation=(
+            "Lance, R. M., Capehart, B., Kadro, O. & Bass, C. R. (2015). Human injury criteria for "
+            "underwater blasts. PLoS ONE 10(11): e0143485."
+        ),
+        url="https://pmc.ncbi.nlm.nih.gov/articles/PMC4659630/",
+        notes=(
+            "Weibull F(I) = 1 - exp(-(I/eta)^beta) (Eq. 2, verbatim). Table 3 parameters read from a "
+            "summary of the page only; they reproduce the verbatim abstract value (50% fatality at 302 kPa-ms)."
+        ),
+    ),
+    "yelverton_richmond1981": Source(
+        key="yelverton_richmond1981",
+        citation="Yelverton, J. T. & Richmond, D. R. (1981). Underwater explosion damage risk criteria for fish, birds, and mammals. J. Acoust. Soc. Am. 70, S84 (abstract).",
+        notes="Safe impulse for swimmers: 14 kPa-ms.",
+    ),
+    "pnnl2003": Source(
+        key="pnnl2003",
+        citation="Strom, D. J. (2003). Health Impacts from Acute Radiation Exposure. PNNL-14424.",
+        url="https://www.pnnl.gov/publications/health-impacts-acute-radiation-exposure",
+        notes="LD50/60 about 4.5 Gy free in air with minimal medical care.",
+    ),
+    "cdc_ars": Source(
+        key="cdc_ars",
+        citation="CDC. Acute Radiation Syndrome: Information for Clinicians, Table 1.",
+        url="https://www.cdc.gov/radiation-emergencies/hcp/clinical-guidance/ars.html",
+        notes="LD50/60 about 2.5-5 Gy; LD100 about 10 Gy.",
+    ),
+    "icrp108_draft": Source(
+        key="icrp108_draft",
+        citation="ICRP (2007). Environmental Protection: the Concept and Use of Reference Animals and Plants (draft, Dec 2007), paras 173-181.",
+        url="https://icrp.org/docs/RAP_Report(C1to8)draft_Dec2007a.pdf",
+        notes="Juvenile marine fish LD50/30 10.5-55.5 Gy; plaice embryo LD50 0.9 Gy.",
+    ),
 }
 
 
