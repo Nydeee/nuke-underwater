@@ -191,7 +191,7 @@ export function initSimple(ctx) {
   // ---- the film is a list of "beats": each has a moment in the event (sim time), a caption about it and
   //      a camera shot that shows exactly that. Playback glides from one beat to the next in a few
   //      seconds of real time (slow motion early on, fast later), so every caption gets time on screen.
-  const nameOf = (r) => `the ${r.label.replace(/ \d+$/, "").toLowerCase()}`;
+  const nameOf = (r) => `the ${r.label.replace(/ \d+$/, "").toLowerCase().replace(/\batlantic\b/, "Atlantic")}`;
   const listNames = (rs) => rs.length === 1 ? nameOf(rs[0]) : `${rs.slice(0, -1).map(nameOf).join(", ")} and ${nameOf(rs[rs.length - 1])}`;
 
   function startFilm(data) {
@@ -202,7 +202,7 @@ export function initSimple(ctx) {
     const tl = (data.receivers || []).filter((x) => recById[x.id] && !x.error);
     const beats = [];
     const PACE = 1.4;   // seconds on screen per beat are multiplied by this (and by the speed setting)
-    const beat = (t, cam, text, dur = 3.2, real = null) => beats.push({ t, cam, text, dur: dur * PACE, real });
+    const beat = (t, cam, text, dur = 3.2, real = null, rate = 1) => beats.push({ t, cam, text, dur: dur * PACE, real, rate });
     // an impact far away happens late, when the film is skimming fast through time; play the moments
     // around it as they happen (one second per second) so it moves at the same pace as a close one
     const REAL_FROM = 1.5;   // s: impacts later than this get a stretch at real speed
@@ -233,17 +233,42 @@ export function initSimple(ctx) {
       if (g && h.pulse.arrival_s < g.t * 1.6) g.items.push(h); else groups.push({ t: h.pulse.arrival_s, items: [h] });
     }
     const already = new Set(beats.filter((b) => b.cam.id).map((b) => b.cam.id));
-    for (const g of groups.slice(0, 5)) {
-      const items = g.items.map((x) => recById[x.id]);
-      // show a boat if there is one (the blast in the air is the dramatic part), otherwise the first animal
-      const star = items.find((r) => (r.kind === "person" || r.kind === "ship") && !already.has(r.id)) || items.find((r) => !already.has(r.id)) || items[0];
+    // How badly the pressure pulse itself hurts something (burns, radiation and the flash are not what
+    // this shot is about). Only things it visibly hurts ("likely" or worse: they jolt, roll or go limp) get a
+    // shot, so the camera is never left on an animal where nothing happens.
+    const LVN = ["none", "possible", "likely", "severe", "lethal"];
+    const hurt = (x) => (x.effects || []).filter((e) => !/burn|radiation|flash|blind/i.test(e.name)).reduce((m, e) => Math.max(m, LVN.indexOf(e.level)), 0);
+    const isBoat = (x) => ["person", "ship"].includes(recById[x.id].kind) ? 1 : 0;
+    const shots = [];
+    for (const g of groups) {
+      // in each group, the one hit hardest (a boat first when it is a tie), and the camera times its shot by
+      // that one's own arrival, not the group's first
+      const ranked = [...g.items].filter((x) => !already.has(x.id)).sort((p, q) => hurt(q) - hurt(p) || isBoat(q) - isBoat(p) || p.pulse.arrival_s - q.pulse.arrival_s);
+      if (ranked.length) shots.push({ items: g.items, star: ranked[0], lvl: hurt(ranked[0]), ts: ranked[0].pulse.arrival_s });
+    }
+    let pick = shots.filter((x) => x.lvl >= 2);
+    const lastShot = shots[shots.length - 1];
+    if (lastShot && lastShot.lvl < 2) pick.push({ ...lastShot, fade: true });   // one shot of where it fades out, at the end
+    pick = pick.sort((p, q) => p.ts - q.ts).slice(0, 5);
+    for (const [i, sh] of pick.entries()) {
+      const star = recById[sh.star.id], ts = sh.ts;
+      const items = [star, ...sh.items.filter((x) => x.id !== star.id).map((x) => recById[x.id])];   // the one on camera first
       already.add(star.id);
-      const inAir = g.items.find((x) => x.id === star.id).pulse.medium === "air";
+      const inAir = sh.star.pulse.medium === "air";
       const what = inAir ? "The blast wave" : bz >= 0 ? "The pressure wave, pushed down into the sea," : "The shock wave";
-      const text = `${fmtT(g.t)}: ${what} reaches ${listNames(items)} (${fmtKm(Math.hypot(star.x_m, star.y_m || 0))} away).`;
+      const dist = fmtKm(Math.hypot(star.x_m, star.y_m || 0));
+      const text = sh.fade
+        ? `${fmtT(ts)}: ${what} reaches ${nameOf(star)}, ${dist} away. ${sh.lvl === 1 ? "By now it is much weaker: at most a slight injury." : "By now it is too weak to hurt it."}`
+        : `${fmtT(ts)}: ${what} reaches ${listNames(items)} (${dist} away).`;
       const big = star.kind === "person" || star.kind === "ship";
-      if (g.t > REAL_FROM) { const t0 = Math.max(g.t - 2, g.t * 0.72); beat(t0, { name: "focus", id: star.id }, text, 2.4, [t0, g.t + (big ? 7 : 4)]); }
-      else beat(g.t * 0.72, { name: "focus", id: star.id }, text, 3.6);
+      if (ts > REAL_FROM) {
+        // as it happens, from a moment before the hit until the next shot needs the camera (but at least 1 s after)
+        const next = pick[i + 1];
+        let end = ts + (big ? 7 : 4);
+        if (next && next.ts > REAL_FROM) end = Math.min(end, Math.max(ts + 1, Math.max(next.ts - 2, next.ts * 0.72) - 0.05));
+        const t0 = Math.max(ts - 2, ts * 0.72, i > 0 ? Math.min(pick[i - 1].ts + 1, ts - 0.3) : 0);
+        beat(t0, { name: "focus", id: star.id }, text, 2.4, [t0, end]);
+      } else beat(ts * 0.72, { name: "focus", id: star.id }, text, 3.6);
     }
 
     // 3. the cloud (or column)
@@ -259,8 +284,12 @@ export function initSimple(ctx) {
     const boatTl = tl.find((x) => ["person", "ship"].includes(recById[x.id].kind) && x.waves && x.waves.height_high_m > 0.5);
     if (boatTl) {
       const tw = boatTl.waves.max_wave_arrival_s;
-      const text = `${fmtT(tw)}: waves up to ${Math.round(boatTl.waves.height_high_m)} m high reach ${nameOf(recById[boatTl.id])}.`;
-      if (tw > REAL_FROM * 4) beat(tw - 6, { name: "focus", id: boatTl.id, low: true }, text, 2.4, [tw - 6, tw + 14]);
+      // These waves are a long swell (a crest every ~10-40 s), so at true speed hardly one passes while you watch.
+      // Play them sped up so a crest goes by about every 3 s, and say so.
+      const T = data.waves?.period_s || 10, k = Math.max(1, Math.round(T / 3));
+      const text = `${fmtT(tw)}: waves up to ${Math.round(boatTl.waves.height_high_m)} m high reach ${nameOf(recById[boatTl.id])}.`
+        + (k > 1 ? ` (Shown ${k}× faster: a crest comes every ${Math.round(T)} seconds.)` : "");
+      if (tw > REAL_FROM * 4) beat(Math.max(tw - 1.5 * T, tw * 0.6), { name: "focus", id: boatTl.id, low: true }, text, 2.4, [Math.max(tw - 1.5 * T, tw * 0.6), tw + 3 * T], k);
       else beat(tw * 0.8, { name: "focus", id: boatTl.id, low: true }, text, 4);
     }
 
@@ -319,7 +348,7 @@ export function initSimple(ctx) {
     const tNext = next ? next.t : film.end;
     let f = 0;
     if (b.live) {   // as it happens: one simulated second per second (times the speed setting)
-      if (!film.paused) film.simT = Math.min(film.simT + dt * speed, b.real[1]);
+      if (!film.paused) film.simT = Math.min(film.simT + dt * speed * (b.rate || 1), b.real[1]);
       if (film.simT >= b.real[1]) { b.live = false; b.from = b.real[1]; film.elapsed = 0; }
     } else {
       f = Math.min(film.elapsed / b.dur, 1);

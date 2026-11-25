@@ -99,7 +99,13 @@ and fireball can be seen), then faster and faster while the cloud rises. But whe
 shock or a big wave reaches something far away, the film slows back down to *real speed* (one second
 of the event per second on screen) for a few seconds around that moment: about 9 seconds for a boat or
 ship, 6 for an animal and 20 for the biggest waves. So a ship 16 km away shudders at the same pace as
-one close by, instead of flickering past. The things in the sea are placed at distances that scale with the cube root of the yield, so
+one close by, instead of flickering past.
+
+Which things the film shows: when the pressure pulse reaches several things close together in time, the
+camera goes to the one it hurts most (a boat first when it is a tie), and the shot is timed by that
+one's own moment of impact. Things it does not visibly hurt get no shot of their own, except one at the
+end that shows where the pulse has become too weak. The biggest waves are a slow swell (a crest every
+10 to 40 seconds), so that one moment is shown sped up, and the caption says by how much. The things in the sea are placed at distances that scale with the cube root of the yield, so
 every bomb size shows a range from "would not survive" to "unharmed".
 
 *A gentler flash.* The explosion makes the screen flash white. *Settings → Gentler flash and no screen

@@ -518,6 +518,11 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     } else waveRings.forEach((m) => (m.visible = false));
 
     waveState = updateWaves(waveU, wv, t, waveGain());
+    // an above-water camera rides over the waves instead of ending up inside a big one
+    if (waveState && camera.position.y > -1.5) {
+      const [etaC] = etaAt(waveState, Math.hypot(camera.position.x, camera.position.z));
+      if (camera.position.y < etaC + 2.5) camera.position.y = etaC + 2.5;
+    }
     // boats ride the waves: up and down with the sea, tipped by its slope
     if (waveState) for (const m of recGroup.children) {
       if (!m.userData.rec?.boat) continue;

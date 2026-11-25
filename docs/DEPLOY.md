@@ -175,3 +175,15 @@ Versioned names are worth adding later only if a bundler ever comes in.
 `/healthz` answers `{"status": "ok"}` without doing any physics. Render uses it to check the site
 is up and restarts the app if it stops answering. You can open
 `https://YOUR-SITE.onrender.com/healthz` yourself.
+
+## Before you announce it: let search engines in
+
+While you test, `index.html` has a line near the top that asks search engines not to list the site:
+
+```html
+<meta name="robots" content="noindex, nofollow">
+```
+
+When the site is ready for everyone, delete that line (and the comment above it), commit and push. Search
+engines then start listing it, usually within a few days to a few weeks.
+
