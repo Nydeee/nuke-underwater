@@ -4,8 +4,26 @@
     {
       "name": "nukesim-web",
       "runtimeExecutable": "/Users/noahwilliamlauridsen/.local/bin/uv",
-      "runtimeArgs": ["run", "nukesim-web", "--no-browser", "--port", "8000"],
+      "runtimeArgs": [
+        "run",
+        "nukesim-web",
+        "--no-browser",
+        "--port",
+        "8000"
+      ],
       "port": 8000
+    },
+    {
+      "name": "nukesim-web-timeline",
+      "runtimeExecutable": "/Users/noahwilliamlauridsen/.local/bin/uv",
+      "runtimeArgs": [
+        "run",
+        "nukesim-web",
+        "--no-browser",
+        "--port",
+        "8011"
+      ],
+      "port": 8011
     }
   ]
 }

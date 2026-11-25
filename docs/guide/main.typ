@@ -16,5 +16,6 @@
 #include "ch08_surface_bursts.typ"
 #include "ch09_using_the_app.typ"
 #include "ch10_uncertainty.typ"
+#include "ch11_timeline.typ"
 #include "glossary.typ"
 #include "references.typ"

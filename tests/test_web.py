@@ -18,6 +18,9 @@ def test_index_and_vendor_files_are_served():
     assert "importmap" in client.get("/").text
     assert client.get("/vendor/three/three.module.min.js").status_code == 200
     assert client.get("/app.js").status_code == 200
+    assert client.get("/timeline.js").status_code == 200
+    assert client.get("/timeline.css").status_code == 200
+    assert 'from "./timeline.js"' in client.get("/app.js").text
 
 
 def test_info():

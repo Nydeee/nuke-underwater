@@ -26,6 +26,7 @@ from ..uncertainty import INGREDIENTS
 from ..effects import (air_blast, air_to_water, fallout, near_surface_shock, radiation_shielding,
                        underwater_shock, water_waves)
 from ..scenario import Burst, Environment, Receiver
+from ..timeline import timeline as build_timeline
 
 STATIC = Path(__file__).parent / "static"
 
@@ -81,6 +82,11 @@ class RangeIn(Scenario):
 
 class FalloutIn(Scenario):
     receiver: ReceiverIn
+    days: float = Field(30.0, gt=0, le=365)
+
+
+class TimelineIn(Scenario):
+    receivers: list[ReceiverIn] = []
     days: float = Field(30.0, gt=0, le=365)
 
 
@@ -271,6 +277,17 @@ def fallout_series(f: FalloutIn):
         "internal_high_ugy_h": lt.internal_ugy_h[1] if lt.internal_ugy_h is not None else None,
         "findings": lt.findings, "notes": lt.notes,
     })
+
+
+@app.post("/api/timeline")
+def timeline_series(tl: TimelineIn):
+    """When things happen: event times, blast/wave fronts vs time, fallout, and each receiver's timeline."""
+    b, env = _burst(tl.burst), _env(tl.env)
+    if regime(b, env).startswith("impossible"):
+        raise HTTPException(status_code=422, detail=regime(b, env))
+    return _clean(build_timeline(b, env, [_receiver(r) for r in tl.receivers], wind_mph=tl.burst.wind_mph,
+                                 fission_fraction=tl.burst.fission_fraction, days=tl.days,
+                                 max_fireball_radius_m=fireball_radius_m(b.yield_kt, b.z_m)))
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

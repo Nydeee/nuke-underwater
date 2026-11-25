@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nukesim · Nuclear burst on water</title>
+  <title>nukesim · Nuclear Burst on Water</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
     { "imports": {
@@ -12,53 +12,76 @@
     } }
   </script>
 </head>
-<body>
-  <aside id="controls">
-    <h1>nukesim</h1>
-    <p class="sub">Nuclear burst on water · local simulator</p>
+<body class="basic">
+  <header id="topbar">
+    <div class="brand"><span class="logo">◎</span> nukesim <span class="tag">Nuclear burst on water simulator</span></div>
+    <label class="preset">Scenario
+      <select id="presetSel">
+        <option value="">Choose a scenario…</option>
+        <option value="hiroshima">Hiroshima-sized air burst over the sea (15 kt, 580 m)</option>
+        <option value="baker">Crossroads BAKER, 1946 (23 kt, 27 m under a lagoon)</option>
+        <option value="surface1mt">1 Mt burst on the sea surface</option>
+        <option value="air1mt">1 Mt air burst over the ocean (2 km up)</option>
+        <option value="deep">Deep underwater 100 kt (300 m deep)</option>
+      </select>
+    </label>
+    <div class="seg" id="viewSeg" aria-label="View">
+      <button data-view="technical" class="on" title="Scientific view: cut-away, overlays and dragging">Technical</button>
+      <button data-view="realistic" title="Realistic view: ocean, sky, fireball and cloud, driven by the timeline">Realistic</button>
+    </div>
+    <div class="seg" id="detailSeg" aria-label="Detail level">
+      <button data-detail="basic" class="on" title="Key numbers and plain wording">Basic</button>
+      <button data-detail="expert" title="Every criterion, source, uncertainty setting and caveat">Expert</button>
+    </div>
+    <button id="helpBtn" class="ghost" title="How to use this">? Help</button>
+  </header>
 
-    <section>
-      <h2>Burst</h2>
+  <aside id="controls">
+    <details open>
+      <summary>💥 Burst</summary>
       <label>Yield
         <span class="row"><input id="yield" type="number" min="0.001" step="any" value="20">
           <select id="yieldUnit"><option value="1">kt</option><option value="1000">Mt</option></select></span>
+        <span class="help">Energy released, in thousands (kt) or millions (Mt) of tons of TNT.</span>
       </label>
-      <label>Position
+      <label><span data-basic="Where" data-expert="Height of burst (HOB) / depth of burst (DOB)">Where</span>
         <span class="row"><select id="side"><option value="above">above the water</option><option value="below">below the water</option></select>
           <input id="burstDist" type="number" min="0" step="any" value="500"><span class="unit">m</span></span>
       </label>
-      <label>Fission share <span class="row"><input id="fission" type="number" min="1" max="100" value="100"><span class="unit">%</span></span></label>
-      <label>Wind (for fallout) <span class="row"><input id="wind" type="number" min="1" max="100" value="15"><span class="unit">mph</span></span></label>
-    </section>
+      <label>Wind <span class="row"><input id="wind" type="number" min="1" max="100" value="15"><span class="unit">mph</span></span>
+        <span class="help">Carries the fallout downwind (+x direction).</span></label>
+      <label class="expert">Fission share of yield <span class="row"><input id="fission" type="number" min="1" max="100" value="100"><span class="unit">%</span></span>
+        <span class="help">Fallout scales with fission yield (Glasstone §9.94).</span></label>
+    </details>
 
-    <section>
-      <h2>Sea</h2>
+    <details open>
+      <summary>🌊 Sea</summary>
       <label class="check"><input id="deepOcean" type="checkbox" checked> Deep open ocean</label>
       <label>Water depth <span class="row"><input id="waterDepth" type="number" min="1" value="200" disabled><span class="unit">m</span></span></label>
-    </section>
+    </details>
 
-    <section>
-      <h2>Add something to the sea</h2>
+    <details open>
+      <summary>🐟 Things in the sea</summary>
       <div class="buttons">
         <button data-add="fish">🐟 Fish</button>
         <button data-add="whale">🐋 Whale</button>
         <button data-add="dolphin">🐬 Dolphin</button>
         <button data-add="turtle">🐢 Turtle</button>
         <button data-add="diver">🤿 Diver</button>
-        <button data-add="boat">🚤 Person on a boat</button>
+        <button data-add="boat">🚤 Boat</button>
       </div>
-      <p class="hint">Drag them in the 3D view along the cut-away (distance and depth).</p>
+      <p class="help">In the technical view, drag them along the cut-away to change distance and depth.</p>
       <ul id="receiverList"></ul>
-    </section>
+    </details>
 
-    <section>
-      <h2>View</h2>
+    <details id="techViewBox" open>
+      <summary>🔬 Technical view</summary>
       <label>Distance shown <span class="row"><input id="maxRange" type="number" min="0.1" step="any" value="3"><span class="unit">km</span></span></label>
       <label>Depth shown <span class="row"><input id="maxDepth" type="number" min="1" value="100"><span class="unit">m</span></span></label>
-      <label>Height of the water view (vs. distance) <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>
-      <label>Overlay on the cut-away
+      <label class="expert">Water view height vs distance <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>
+      <label>Colour the cut-away by
         <select id="overlay">
-          <option value="none">none</option>
+          <option value="none">nothing</option>
           <option value="pressure">peak water pressure</option>
           <option value="dose">initial radiation dose</option>
           <option value="zones">danger zones for…</option>
@@ -67,30 +90,64 @@
       <label id="zonesKindLabel" hidden>Danger zones for
         <select id="zonesKind"><option value="fish">fish</option><option value="mammal">marine mammal</option><option value="turtle">turtle</option><option value="diver">diver</option></select>
       </label>
-      <button id="computeOverlay">Compute overlay</button>
+      <button id="computeOverlay" class="primary">Show overlay</button>
       <div id="legend"></div>
-    </section>
+    </details>
   </aside>
 
   <main>
     <div id="scene"></div>
-    <div id="status">Loading…</div>
     <div id="burstInfo"></div>
+    <div id="camBar" hidden>
+      <span>Camera:</span>
+      <button data-cam="aerial">Aerial</button>
+      <button data-cam="side">Side</button>
+      <button data-cam="boat">From a boat</button>
+      <button data-cam="far">Far away</button>
+    </div>
+    <div id="status">Loading…</div>
   </main>
 
   <aside id="results">
-    <h2>Results</h2>
-    <p class="hint">Click something in the sea to see what happens to it.</p>
-    <label class="check"><input id="uncertainty" type="checkbox"> Show uncertainty (runs each case
-      <input id="nSamples" type="number" min="20" max="2000" value="200" style="width:70px"> times)</label>
+    <div class="resultsHead">
+      <h2>Results</h2>
+      <label class="check small"><input id="uncertainty" type="checkbox"> Show uncertainty</label>
+      <label class="small expert">runs <input id="nSamples" type="number" min="20" max="2000" value="200" style="width:64px"></label>
+    </div>
+    <p class="help" id="resultsHint">Click something in the sea (or in the list) to see what happens to it.</p>
     <div id="report"></div>
-    <h3>Waves</h3>
-    <canvas id="waveChart" width="360" height="200"></canvas>
-    <p id="waveInfo" class="hint"></p>
-    <h3>Fallout over 30 days (selected)</h3>
-    <canvas id="falloutChart" width="360" height="200"></canvas>
-    <p id="falloutInfo" class="hint"></p>
+    <details open>
+      <summary>Waves</summary>
+      <canvas id="waveChart" width="360" height="190"></canvas>
+      <p id="waveInfo" class="help"></p>
+    </details>
+    <details open>
+      <summary>Fallout dose over 30 days (selected)</summary>
+      <canvas id="falloutChart" width="360" height="190"></canvas>
+      <p id="falloutInfo" class="help"></p>
+    </details>
+    <details class="expert" id="viewNotesBox">
+      <summary>What the realistic view shows</summary>
+      <ul id="viewNotes" class="notes"></ul>
+    </details>
   </aside>
+
+  <div id="helpModal" hidden>
+    <div class="card">
+      <h2>How to use nukesim</h2>
+      <ol>
+        <li><b>Pick a scenario</b> at the top, or set the burst yourself on the left (yield, above or below the water, how far).</li>
+        <li><b>Add things to the sea</b>: fish, whales, dolphins, turtles, divers and boats. In the technical view, drag them to move them.</li>
+        <li><b>Click one</b> to see what happens to it: blast, hearing, burns, radiation and fallout, each with the numbers behind it.</li>
+        <li><b>Use the timeline</b> at the bottom to play the event from the flash to weeks later.</li>
+        <li>Switch to <b>Realistic</b> to watch it as it would look: ocean, sky, fireball, mushroom cloud and waves.</li>
+        <li><b>Basic / Expert</b> switches how much detail you see. Expert shows every criterion, source and caveat.</li>
+      </ol>
+      <p class="help">All numbers come from published sources (Glasstone &amp; Dolan, U.S. Navy, IAEA, ICRP and others) and carry their limits.
+        This is an educational tool, not a substitute for detailed engineering models.</p>
+      <button id="helpClose" class="primary">Got it</button>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

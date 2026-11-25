@@ -4,6 +4,9 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { initTimeline } from "./timeline.js";   // time slider (see timeline.js)
+import { makeModel } from "./models.js";
+import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
 
 // ---------------------------------------------------------------- talking to the server
 async function api(path, body) {
@@ -51,15 +54,22 @@ const fromY = (y) => (y < 0 ? y / waterScale() : y * 1000);
 
 // ---------------------------------------------------------------- three.js scene
 const host = $("scene");
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 host.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0f1720);
+scene.background = (() => {   // soft vertical gradient behind the technical view
+  const c = document.createElement("canvas"); c.width = 2; c.height = 256;
+  const g = c.getContext("2d"), grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, "#16263a"); grad.addColorStop(0.55, "#0e1825"); grad.addColorStop(1, "#070c12");
+  g.fillStyle = grad; g.fillRect(0, 0, 2, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
 const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 5000);
 const controls = new OrbitControls(camera, renderer.domElement);
-scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xdfeaff, 0x1a2a3a, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(3, 10, 6);
 scene.add(sun);
 
@@ -73,6 +83,7 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  realistic?.resize(w, h);
 }
 window.addEventListener("resize", resize);
 new ResizeObserver(resize).observe(host);
@@ -85,14 +96,17 @@ function clearGroup(g) {
   }
 }
 
-function textSprite(text, color = "#dce6ef") {
+function textSprite(text, color = "#e3ebf3") {
   const c = document.createElement("canvas");
-  c.width = 256; c.height = 64;
+  c.width = 512; c.height = 128;
   const g = c.getContext("2d");
-  g.font = "28px sans-serif"; g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "middle";
-  g.fillText(text, 128, 32);
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  g.font = "600 52px -apple-system, Segoe UI, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineWidth = 10; g.strokeStyle = "rgba(7,12,18,0.85)"; g.strokeText(text, 256, 64);
+  g.fillStyle = color; g.fillText(text, 256, 64);
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4; tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   s.scale.set(0.5, 0.125, 1);
+  s.renderOrder = 5;
   return s;
 }
 
@@ -104,17 +118,28 @@ function buildStatic() {
   const sc = scenario();
 
   // sea surface (both sides of the burst, so the 3D scene reads as an ocean)
-  const surf = new THREE.Mesh(new THREE.PlaneGeometry(2 * Rk, 2 * Rk),
-    new THREE.MeshPhongMaterial({ color: 0x2b6e9e, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  const surf = new THREE.Mesh(new THREE.CircleGeometry(Rk * 1.15, 96),
+    new THREE.MeshStandardMaterial({ color: 0x2d77a8, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
   surf.rotation.x = -Math.PI / 2;
   staticGroup.add(surf);
-  const grid = new THREE.GridHelper(2 * Rk, 20, 0x4fa3d9, 0x2a4a63);
-  grid.position.y = 0.0005;
-  staticGroup.add(grid);
+  // distance rings around ground zero (every quarter of the distance shown)
+  for (let i = 1; i <= 4; i++) {
+    const r = (Rk * i) / 4;
+    const ringMesh = new THREE.Mesh(new THREE.RingGeometry(r - Rk * 0.0015, r + Rk * 0.0015, 160),
+      new THREE.MeshBasicMaterial({ color: 0x5fb4ea, transparent: true, opacity: i === 4 ? 0.55 : 0.3, side: THREE.DoubleSide, depthWrite: false }));
+    ringMesh.rotation.x = -Math.PI / 2; ringMesh.position.y = 0.0005;
+    staticGroup.add(ringMesh);
+  }
+  const cross = new THREE.Mesh(new THREE.RingGeometry(0, Rk * 0.01, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+  cross.rotation.x = -Math.PI / 2; cross.position.y = 0.0006;
+  staticGroup.add(cross);
 
   // cut-away plane: distance (x >= 0) vs depth, where receivers live and overlays are drawn
   cutaway = new THREE.Mesh(new THREE.PlaneGeometry(Rk, -depthY),
-    new THREE.MeshBasicMaterial({ color: 0x174a6e, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: 0x1b5f8c, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(Rk, -depthY)), new THREE.LineBasicMaterial({ color: 0x5fb4ea, transparent: true, opacity: 0.6 }));
+  edge.position.set(Rk / 2, depthY / 2, 0);
+  staticGroup.add(edge);
   cutaway.position.set(Rk / 2, depthY / 2, 0);
   staticGroup.add(cutaway);
   if (state.overlay) applyOverlayTexture();
@@ -123,7 +148,7 @@ function buildStatic() {
   const wd = sc.env.water_depth_m;
   if (wd && wd <= D) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * Rk, 2 * Rk),
-      new THREE.MeshPhongMaterial({ color: 0x6b5a44, side: THREE.DoubleSide }));
+      new THREE.MeshStandardMaterial({ color: 0x7a6548, roughness: 0.95, side: THREE.DoubleSide }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = toY(-wd);
     staticGroup.add(floor);
@@ -141,6 +166,7 @@ function buildStatic() {
     const fb = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.acos(-cut)),
       new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.35, depthWrite: false }));
     fb.position.copy(burst.position);
+    fb.userData.role = "fireball";   // the timeline hides this and draws a growing one
     staticGroup.add(fb);
   }
 
@@ -163,18 +189,16 @@ function buildStatic() {
 
 function receiverMesh(r) {
   const { R } = view();
-  const size = (R / 1000) * 0.022;
-  let geo;
-  if (r.kind === "fish") geo = new THREE.SphereGeometry(size * 0.6, 16, 10);
-  else if (r.kind === "mammal") geo = new THREE.CapsuleGeometry(size * 0.6, size * (r.mass_kg > 1000 ? 2.4 : 1.2), 6, 12);
-  else if (r.kind === "turtle") geo = new THREE.CylinderGeometry(size * 0.8, size * 0.8, size * 0.35, 20);
-  else if (r.kind === "diver") geo = new THREE.CapsuleGeometry(size * 0.35, size * 1.1, 6, 12);
-  else geo = new THREE.BoxGeometry(size * 2.2, size * 0.7, size * 1.0);
+  const big = r.kind === "mammal" && (r.preset === "whale" || (r.mass_kg ?? 0) > 1000);
+  const size = (R / 1000) * (big ? 0.07 : r.kind === "person" ? 0.06 : 0.045);   // icon size, not to scale
   const color = levelColor(state.results[r.id]);
-  const m = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, emissive: r.id === state.selected ? 0x335577 : 0x000000 }));
-  if (r.kind === "mammal" || r.kind === "diver") m.rotation.z = r.kind === "mammal" ? Math.PI / 2 : 0;
-  m.position.set(r.x_m / 1000, toY(r.z_m), 0);
+  const m = makeModel(r, color);
+  m.scale.setScalar(size);
+  m.rotation.y = Math.PI;   // face ground zero
+  if (r.id === state.selected) m.material.emissive?.setHex(0x335577);
+  m.position.set(r.x_m / 1000, toY(r.z_m) + (r.kind === "person" ? size * 0.05 : 0), 0);
   m.userData.id = r.id;
+  m.traverse((o) => { o.userData.id = r.id; });
   return m;
 }
 
@@ -206,7 +230,8 @@ function pick(ev) {
 
 renderer.domElement.addEventListener("pointerdown", (ev) => {
   pick(ev);
-  const hit = raycaster.intersectObjects(receiverGroup.children)[0];
+  if (mode !== "technical") return;
+  const hit = raycaster.intersectObjects(receiverGroup.children, true)[0];
   if (hit) {
     dragging = hit.object.userData.id;
     controls.enabled = false;
@@ -310,13 +335,19 @@ function renderReport() {
   if (!res) { box.innerHTML = `<p class="hint">Calculating…</p>`; return; }
   if (res.error) { box.innerHTML = `<p class="error">${esc(res.error)}</p>`; return; }
   const u = res.uncertain;
-  let html = `<h3>${r.emoji} ${esc(r.label)} — best estimate: <span class="level lv-${res.worst}">${res.worst}</span></h3>`;
-  if (u) html += `<div>Chance of each worst outcome (${u.n} runs):</div>${probBar(u.level_probs)}`;
+  const expert = detail === "expert";
+  const where = r.kind === "person" ? "on deck" : `${Math.round(-r.z_m)} m deep`;
+  let html = `<div class="summaryCard"><div class="big">${r.emoji} ${esc(r.label)}</div>
+    <div class="help">${(r.x_m / 1000).toFixed(2)} km from ground zero, ${where}</div>
+    <div style="margin-top:6px">Worst effect: <span class="level lv-${res.worst}">${res.worst}</span>
+    ${u ? ` · most likely: <span class="level lv-${u.most_likely}">${u.most_likely}</span>` : ""}</div>
+    ${u ? `${probBar(u.level_probs)}<div class="help">chance of each worst outcome over ${u.n} runs</div>` : ""}</div>`;
   for (const e of res.effects) {
     const ue = u && u.effects.find((x) => x.name === e.name);
-    const range = ue && ue.p05 != null ? `<div class="range">likely range (5–95%): ${fmtNum(ue.p05)} – ${fmtNum(ue.p95)} ${esc(ue.unit)}</div>${probBar(ue.level_probs)}` : "";
+    const range = ue && ue.p05 != null ? `<div class="range">likely range (5–95%): ${fmtNum(ue.p05)} – ${fmtNum(ue.p95)} ${esc(ue.unit)}</div>${expert ? probBar(ue.level_probs) : ""}` : "";
     html += `<div class="effect"><span class="level lv-${e.level}">${e.level}</span> <b>${esc(e.name)}</b>
-      <div class="val">${esc(e.value)}</div>${range}<div class="src">${esc(e.criterion)} · source: ${esc(e.source)}</div></div>`;
+      <div class="val">${esc(e.value)}</div>${range}
+      <div class="src">${expert ? `${esc(e.criterion)} · source: ${esc(e.source)}` : `threshold: ${esc(e.criterion)}`}</div></div>`;
   }
   if (res.long_term) {
     html += `<h3>Fallout over the following weeks</h3><ul class="notes">${res.long_term.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`;
@@ -325,9 +356,11 @@ function renderReport() {
       html += `<div class="range">Fallout dose over the period, likely range (5–95%): ${fmtNum(d.p05)} – ${fmtNum(d.p95)} Gy (median ${fmtNum(d.p50)})</div>`;
     }
   }
-  const notes = [...(res.notes || []), ...((res.long_term && res.long_term.notes) || []), ...((u && u.notes) || [])];
-  if (notes.length) html += `<h3>Assumptions &amp; warnings</h3><ul class="notes">${[...new Set(notes)].map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
+  const notes = [...new Set([...(res.notes || []), ...((res.long_term && res.long_term.notes) || []), ...((u && u.notes) || [])])];
+  if (notes.length) html += `<details ${expert ? "open" : ""}><summary>Assumptions &amp; warnings (${notes.length})</summary>
+    <ul class="notes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>`;
   box.innerHTML = html;
+  $("resultsHint").hidden = true;
 }
 
 // ---------------------------------------------------------------- calling the server
@@ -344,6 +377,7 @@ async function runAssess() {
       ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })) });
     state.results = Object.fromEntries(data.receivers.map((x) => [x.id, x]));
     $("status").textContent = `Updated · ${state.receivers.length} in the sea`;
+    if (mode === "realistic") realistic.rebuildReceivers();
   } catch (err) {
     $("status").textContent = `Error: ${err.message}`;
   }
@@ -370,6 +404,7 @@ async function refreshScenario() {
       info.coupling != null ? `shock coupling into the water: ${(info.coupling * 100).toFixed(info.coupling < 0.1 ? 1 : 0)}%` : null,
       info.crater_radius_m ? `water crater about ${Math.round(info.crater_radius_m)} m radius, ${Math.round(info.crater_depth_m)} m deep` : null,
       sc.burst.z_m >= 0 ? (info.local_fallout ? "local fallout: yes" : "local fallout: none (burst too high)") : null];
+    if (mode === "realistic") realistic.setPreset("aerial");
     $("burstInfo").innerHTML = parts.filter(Boolean).join("<br>");
   } catch (err) { $("burstInfo").textContent = err.message; }
   state.overlay = null; $("legend").innerHTML = "";
@@ -508,9 +543,79 @@ $("computeOverlay").addEventListener("click", computeOverlay);
 $("uncertainty").addEventListener("change", scheduleAssess);
 $("nSamples").addEventListener("change", scheduleAssess);
 
+// ---------------------------------------------------------------- view mode, detail level, presets, help
+let mode = "technical", detail = "basic", realistic = null;
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.view === m));
+  const real = m === "realistic";
+  document.body.classList.toggle("real", real);
+  $("camBar").hidden = !real;
+  $("techViewBox").hidden = real;
+  controls.enabled = !real;
+  realistic.setActive(real);
+  renderer.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.toneMappingExposure = real ? 0.5 : 1;
+  if (real) {
+    realistic.setPreset("aerial");
+    if (timeline.isAtEnd()) { timeline.setTime(0); timeline.play(); }   // start the show from the flash
+  }
+}
+
+function setDetail(d) {
+  detail = d;
+  document.body.classList.toggle("basic", d === "basic");
+  document.body.classList.toggle("expert", d === "expert");
+  document.querySelectorAll("#detailSeg button").forEach((b) => b.classList.toggle("on", b.dataset.detail === d));
+  document.querySelectorAll("[data-basic]").forEach((el) => { el.textContent = el.dataset[d]; });
+  renderReport();
+}
+
+const SCENARIOS = {
+  hiroshima:  { yield: 15, unit: 1, side: "above", dist: 580, deep: true, range: 3, depth: 100 },
+  baker:      { yield: 23, unit: 1, side: "below", dist: 27, deep: false, water: 55, range: 3, depth: 55 },
+  surface1mt: { yield: 1, unit: 1000, side: "above", dist: 0, deep: true, range: 20, depth: 200 },
+  air1mt:     { yield: 1, unit: 1000, side: "above", dist: 2000, deep: true, range: 10, depth: 100 },
+  deep:       { yield: 100, unit: 1, side: "below", dist: 300, deep: true, range: 5, depth: 500 },
+};
+function applyScenario(key) {
+  const s = SCENARIOS[key];
+  if (!s) return;
+  $("yield").value = s.yield; $("yieldUnit").value = s.unit; $("side").value = s.side; $("burstDist").value = s.dist;
+  $("deepOcean").checked = s.deep; $("waterDepth").disabled = s.deep; if (s.water) $("waterDepth").value = s.water;
+  $("maxRange").value = s.range; $("maxDepth").value = s.depth;
+  // spread the existing things in the sea across the new distance shown
+  state.receivers.forEach((r, i) => { r.x_m = s.range * 1000 * (0.25 + 0.6 * (i + 0.5) / Math.max(state.receivers.length, 1)); });
+  frameCamera();
+  refreshScenario();
+  timeline.setTime(0);
+}
+
+document.querySelectorAll("#viewSeg button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.view)));
+document.querySelectorAll("#detailSeg button").forEach((b) => b.addEventListener("click", () => setDetail(b.dataset.detail)));
+document.querySelectorAll("#camBar [data-cam]").forEach((b) => b.addEventListener("click", () => realistic.setPreset(b.dataset.cam)));
+$("presetSel").addEventListener("change", (e) => applyScenario(e.target.value));
+$("helpBtn").addEventListener("click", () => { $("helpModal").hidden = false; });
+$("helpClose").addEventListener("click", () => {
+  $("helpModal").hidden = true;
+  try { localStorage.setItem("nukesim.helpSeen", "1"); } catch (_) { /* storage may be unavailable */ }
+});
+try { if (!localStorage.getItem("nukesim.helpSeen")) $("helpModal").hidden = false; } catch (_) { /* ignore */ }
+
 resize();
 frameCamera();
-(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+// ---------------------------------------------------------------- timeline hook (everything else is in timeline.js)
+const timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
+realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info });
+$("viewNotes").innerHTML = realistic.notes.map((n) => `<li>${esc(n)}</li>`).join("");
+resize();
+(function loop() {
+  requestAnimationFrame(loop);
+  timeline.update();
+  if (mode === "realistic") { realistic.update(); renderer.render(realistic.scene, realistic.camera); }
+  else { controls.update(); renderer.render(scene, camera); }
+})();
 addReceiver("fish");
 addReceiver("dolphin");
 addReceiver("boat");
