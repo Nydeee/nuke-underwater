@@ -21,7 +21,7 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.optimize import brentq
+from ..rootfind import brent as brentq   # (Brent's method, as scipy.optimize.brentq; numpy only)
 
 from .. import units
 from ..uncertainty import factor

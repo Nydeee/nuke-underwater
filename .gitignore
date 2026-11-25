@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 output/
 .DS_Store
+
+
+# the built static website (scripts/build_static.py)
+build/

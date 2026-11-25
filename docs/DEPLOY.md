@@ -1,9 +1,59 @@
-# Putting nukesim on the internet
+# Putting the website on the internet
 
-This guide turns the app you run with `uv run nukesim-web` into a public website that anyone can
-open with a link. You don't need to know about servers. Plan on about 30 minutes the first time.
+There are two ways to run the website. Both show exactly the same thing and use the same physics code.
 
-## What we use, and why
+| | **GitHub Pages** (recommended) | **A server** (Render, Fly.io, ...) |
+|---|---|---|
+| Cost | **free** | $0 (sleeps when idle) to about $7 a month |
+| Where the physics runs | in each visitor's browser | on the server |
+| First visit | downloads about 8 MB of Python machinery once (a few seconds; cached after) | instant, but a sleeping free server takes about a minute to wake |
+| Upkeep | none | a server to keep running |
+
+## GitHub Pages (free): the physics runs in the browser
+
+The site is published as plain files. The simulator's own Python code runs inside each visitor's browser
+with **Pyodide** (Python compiled to WebAssembly; it is downloaded from the jsDelivr CDN the first time and
+then kept by the browser). Measured on a Mac: the film's timeline takes about 20 ms and the danger
+distances about 0.2 s, roughly 1.8 times slower than normal Python; a phone may be a few times slower,
+which the countdown hides.
+
+### One-time setup
+
+1. **Put the project on GitHub** (see "Put the project on GitHub" below) and push.
+2. On GitHub, open the repository → **Settings** → **Pages**. Under *Build and deployment*, set
+   **Source** to **GitHub Actions**.
+3. Push again (or open the **Actions** tab and press **Run workflow** on "Publish the website").
+   The workflow in `.github/workflows/pages.yml` runs the tests, builds the site with
+   `scripts/build_static.py` and publishes it. It takes a couple of minutes. A change that breaks a test
+   is never published.
+4. **Your domain.** Still in **Settings** → **Pages**, type `whatifanukeexplodedunderwater.com` under
+   *Custom domain* and save. Then, at the company where you bought the domain, add these DNS records
+   (GitHub's own help page "Managing a custom domain for your GitHub Pages site" has the current list):
+   - four **A** records for `@` pointing to `185.199.108.153`, `185.199.109.153`, `185.199.110.153`
+     and `185.199.111.153`;
+   - a **CNAME** record for `www` pointing to `YOUR-NAME.github.io`.
+
+   It can take from minutes to a few hours to start working. Then tick **Enforce HTTPS** on the same page.
+
+After that, **every push to `main` updates the website by itself.**
+
+### Try the static version on your own computer
+
+```bash
+uv run python scripts/build_static.py --serve
+```
+
+This builds the site into `build/site/` and shows it at http://127.0.0.1:8001, exactly as it will be online
+(the physics running in your browser). `uv run nukesim-web` still works as before, with the server.
+
+## A server instead (Render)
+
+Everything below is for running it on a server instead. You don't need it for GitHub Pages.
+
+This part turns the app you run with `uv run nukesim-web` into a server-hosted website. Plan on about
+30 minutes the first time.
+
+### What we use, and why
 
 **Render** ([render.com](https://render.com)) runs the website. Here is why:
 
@@ -24,7 +74,7 @@ other hosts, so you aren't locked in.
 
 > Prices are from late 2026. Check the host's pricing page before you choose a plan.
 
-### What it will cost
+#### What it will cost
 
 | Plan | Cost | What you get |
 |---|---|---|
@@ -35,7 +85,7 @@ other hosts, so you aren't locked in.
 The physics runs on the server, so more visitors means more work for it. The built-in limits
 (below) stop any one person from using it all up.
 
-## Step by step
+## Step by step (server)
 
 ### 1. Put the project on GitHub
 
@@ -175,15 +225,3 @@ Versioned names are worth adding later only if a bundler ever comes in.
 `/healthz` answers `{"status": "ok"}` without doing any physics. Render uses it to check the site
 is up and restarts the app if it stops answering. You can open
 `https://YOUR-SITE.onrender.com/healthz` yourself.
-
-## Before you announce it: let search engines in
-
-While you test, `index.html` has a line near the top that asks search engines not to list the site:
-
-```html
-<meta name="robots" content="noindex, nofollow">
-```
-
-When the site is ready for everyone, delete that line (and the comment above it), commit and push. Search
-engines then start listing it, usually within a few days to a few weeks.
-

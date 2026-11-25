@@ -108,6 +108,13 @@ end that shows where the pulse has become too weak. The biggest waves are a slow
 10 to 40 seconds), so that one moment is shown sped up, and the caption says by how much. The things in the sea are placed at distances that scale with the cube root of the yield, so
 every bomb size shows a range from "would not survive" to "unharmed".
 
+*Where the calculations run.* On the public website there is no server doing the physics: the
+simulator's own Python code (the same code, with the same tests) runs inside your browser, using
+*Pyodide*, a version of Python made to run in web pages. The first visit downloads it (about 8 MB),
+then the browser keeps it. The work happens in the background, so the 3D view never freezes. When you
+run the app on your own computer with `uv run nukesim-web`, a small local server does the same
+calculations instead. Both give exactly the same numbers (a test checks this).
+
 *A gentler flash.* The explosion makes the screen flash white. *Settings → Gentler flash and no screen
 shake* softens it a lot (to about a seventh) and stops the camera shaking. It is switched on by itself
 when a device asks for reduced motion (an accessibility setting on phones and computers), and the start

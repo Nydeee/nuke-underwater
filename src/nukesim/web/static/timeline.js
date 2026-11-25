@@ -22,6 +22,7 @@ const SPEEDS = [
 const EVENT_COLORS = { burst: "#ffffff", thermal: "#ffb347", blast: "#e2552c", radiation: "#b48cff", wave: "#4fd1ff", fallout: "#d6c24a" };
 
 // ---------------------------------------------------------------- small helpers
+import { callApi } from "./physics.js";
 export function fmtTime(t) {
   if (!(t > 0)) return "0 s (detonation)";
   const p = (v) => +v.toPrecision(v < 10 ? 2 : 3);
@@ -167,8 +168,8 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
   async function fetchTimeline(body) {
     fetching = true;
     try {
-      const res = await fetch("/api/timeline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const j = await res.json();
+      const res = await callApi("/api/timeline", body);
+      const j = res.data;
       if (!res.ok) throw new Error(typeof j.detail === "string" ? j.detail
         : /Input should be/.test(JSON.stringify(j.detail)) ? 'the app\u2019s server is running older code than this page. Restart it: stop it with Ctrl+C, then run "uv run nukesim-web" again.'
         : "invalid scenario");

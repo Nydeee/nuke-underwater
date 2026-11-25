@@ -172,8 +172,17 @@ export function initSimple(ctx) {
       q(".spCountNum").textContent = n || "";
       if (n > 0) { ctx.sound.tick(n === 1); n--; setTimeout(step, 800); return; }
       // wait for the simulator's timeline of this scenario (it is computed in the background)
-      const t0 = performance.now();
+      let t0 = performance.now(), told = false;
       const wait = () => {
+        // static website, first visit: Python and the physics are still downloading (a few MB, once)
+        const ps = ctx.physicsState?.();
+        if (ps && ps.local && !ps.ready && !ps.error) {
+          if (!told) { told = true; q(".spCountNum").textContent = "⏳"; q(".spFact").textContent = "Getting the physics ready… (only on your first visit: it runs right here in your browser)"; }
+          t0 = performance.now();   // the clock for "no answer" starts once it is ready
+          setTimeout(wait, 150);
+          return;
+        }
+        if (ps?.error) { show("start"); ctx.toast(`The explosion could not be worked out: ${ps.error}. Check your internet connection and reload the page.`, { kind: "err", ms: 12000 }); return; }
         const d = ctx.timeline.getData(), err = ctx.timeline.getError(), waited = performance.now() - t0;
         if ((d && d !== before) || (waited > 400 && ctx.timeline.upToDate())) return startFilm(d);   // (same scenario as last time: nothing new to wait for)
         if ((err && waited > 1500) || waited > 15000) {   // it failed (or never came): say so instead of freezing

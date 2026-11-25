@@ -89,7 +89,8 @@ def test_unexpected_error_is_a_short_json_message(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("secret internal detail /Users/someone/file.py line 42")
 
-    monkeypatch.setattr(server, "build_timeline", boom)
+    from nukesim.web import api
+    monkeypatch.setattr(api, "build_timeline", boom)
     c = TestClient(app, raise_server_exceptions=False)
     r = c.post("/api/timeline", json={"burst": BURST})
     assert r.status_code == 500

@@ -5,7 +5,7 @@ description = "Accuracy-first simulator of nuclear detonation effects in and on 
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
-    "scipy>=1.11",
+    "pydantic>=2",
     "matplotlib>=3.8",
     "fastapi>=0.165.0",
     "uvicorn>=0.54.0",
@@ -19,6 +19,7 @@ dev = [
     "httpx>=0.28.1",
     "pypdfium2>=5.15.2",
     "pytest>=8",
+    "scipy>=1.11",   # only to check our own root finder against SciPy's (tests/test_rootfind.py)
     "typst>=0.15.2",
 ]
 

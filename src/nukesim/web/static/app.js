@@ -13,6 +13,7 @@ import { createDive } from "./dive.js";
 import { createSound } from "./sound.js";
 import { loadHumans, tickHumans } from "./humans.js";
 import { loadAnimals, tickAnimals } from "./animals.js";
+import { callApi, startPhysics, physicsState } from "./physics.js";
 
 // The rigged people and the artist-made animals and ships (about 2 MB) load in the background, so the page
 // appears at once; until they arrive the simple code-built models are used, then everything is rebuilt.
@@ -27,11 +28,11 @@ import { createFreecam, createCameraTween } from "./freecam.js";   // WASD free 
 import { units, setSystem, readInput, writeInput, fmtLen, fmtDepth, chartUnits } from "./units.js";
 import { store, toast, attachMenu, closeMenus, openModal, closeModal, anyModalOpen, askText, download, runTour, esc } from "./ui.js";
 
-// ---------------------------------------------------------------- talking to the server
+// ---------------------------------------------------------------- talking to the physics (server, or this browser: physics.js)
+startPhysics();   // on the static website: start loading Python and the physics now, in the background
 async function api(path, body) {
-  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const data = await res.json();
-  if (!res.ok) {
+  const { ok, data } = await callApi(path, body);
+  if (!ok) {
     let msg = typeof data.detail === "string" ? data.detail
       : Array.isArray(data.detail) ? data.detail.map((d) => `${(d.loc || []).slice(1).join(" › ")}: ${d.msg}`).join("; ") : "the server could not handle this request";
     // a choice the server does not recognise usually means the server is older than this page
@@ -1264,7 +1265,7 @@ realistic.setConditions(conditions());
 $("viewNotes").innerHTML = realistic.notes.map((n) => `<li>${esc(n)}</li>`).join("");
 // ---- sound and Simple mode
 simple = initSimple({
-  timeline, realistic, sound, state, scenario, worstSoFar,
+  timeline, realistic, sound, state, scenario, worstSoFar, physicsState,
   getResults: () => state.results,
   toast, download,
   snapshot: () => { renderer.render(realistic.scene, realistic.camera); return renderer.domElement.toDataURL("image/jpeg", 0.88); },
