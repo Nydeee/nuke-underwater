@@ -29,7 +29,7 @@ const FT = 0.3048;
 
 // ---------------------------------------------------------------- cloud size (NUKEMAP fits, feet -> metres)
 // Glasstone Fig. 9.96 fits (cloud top / bottom, stabilised, ~10 min). Yield in kt.
-function cloudTopM(y) {
+export function cloudTopM(y) {
   let kft;
   if (y <= 100) kft = 9.0355598798544854 * Math.pow(y, 0.32095070520890268 - 4.7081309288753766e-5 * y) + 0.081777330384279173;
   else kft = 23.037246630847605 * Math.pow(Math.min(y, 4000), 0.15119655810555122 - 4.634742640937322 / Math.min(y, 4000)) + 1.4709881303279233;
@@ -44,7 +44,7 @@ function cloudBottomM(y) {
 // Miller (1963): final horizontal semi-axis of the cloud top, a = 2340 W^0.431 ft
 const cloudRadiusM = (y) => 2340 * Math.pow(y, 0.431) * FT;
 // Glasstone Fig. 2.12 fit: fraction of final top height reached at time t (s); 1 after 270 s
-function riseFraction(t) {
+export function riseFraction(t) {
   if (t >= 270) return 1;
   return Math.max(0, 9.7225115080563657e-3 + 7.9925510016408026e-3 * t - 1.8866872395194888e-5 * t * t + 1.0765594837466863e-8 * t * t * t);
 }
@@ -122,7 +122,7 @@ function pinTexture(emoji, ring, selected = false) {
 }
 
 // ---------------------------------------------------------------- the view
-export function initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo, colorOf = (r) => levelColor(state.results[r.id]), reactionsOn = () => true }) {
+export function initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo, colorOf = (r) => levelColor(state.results[r.id]), reactionsOn = () => true, sound = null }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 3e6);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -307,10 +307,15 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       look.set(x - d * 1.5, Math.min(y + d * 0.6, -0.5), z);   // tilted up a little: the bright window overhead
     } else if (name === "boat") {
       const x = boat ? boat.x_m : Math.max(top * 1.5, 3000);
+      look.y = Math.min(look.y, Math.hypot(x, 0) * 0.45);   // don't stare straight up into empty sky
       if (boat && boat.kind === "ship") {   // standing on the deck, near the stern
-        const L = realLength(boat);
-        camera.position.set(x - L * 0.4, L * 0.06 + 3, L * 0.01);   // on the bow, which faces the burst
+        const L = realLength(boat) * (boat.ship_type === "small_craft" ? 2 : 1);   // small boats are drawn 2x
+        camera.position.set(x - L * 0.4, L * (boat.ship_type === "small_craft" ? 0.22 : 0.06) + 3, L * 0.01);   // on the bow, which faces the burst
       } else camera.position.set(x + 15, 6, 8);
+    } else if (name === "close") {   // the fireball filling a good part of the view (used for the flash)
+      const fr = getInfo()?.fireball_radius_m || 200, d = Math.max(fr * 16, 1200);
+      camera.position.set(d * 0.75, Math.max(bz * 0.35, 25), d * 0.7);
+      look.set(0, Math.max(bz, fr * 0.5), 0);
     } else if (name === "side") {
       camera.position.set(-top * 0.2, Math.max(top * 0.08, 60), top * 2.2);
       look.set(0, top * 0.4, 0);
@@ -342,6 +347,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     lastT = now;
     if (!active) return;
     water.material.uniforms.time.value += dt * 0.6;
+    camera.position.sub(shakeOff); shakeOff.set(0, 0, 0);
     if (controls.enabled) { tween.update(); controls.update(); }   // (the free camera moves it otherwise)
     // pins follow the injuries that have happened so far; models react (optional, illustrative)
     const colKey = state.receivers.map((r) => colorOf(r)).join("|") + state.selected;
@@ -451,7 +457,42 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       if (hud) hud.querySelector("b").textContent = fmtDepth(-camera.position.y);
     }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    // --- sound and shaking, timed by the physics: when the blast front (or the shock in the water, or the
+    //     biggest wave) actually reaches the camera
+    const tPrev = lastSimT; lastSimT = t;
+    if (t < tPrev) heard.clear();                                   // scrubbed back: things can be heard again
+    const cam = camera.position, dBurst = Math.hypot(cam.x, cam.y - bz, cam.z);
+    if (data && t > 0) {
+      if (!under && ab && bz >= 0) {
+        const slant = interpLogT(ab.t_s, ab.slant_radius_m, t);
+        if (slant >= dBurst && !heard.has("boom")) {
+          heard.add("boom");
+          const pk = interpLogT(ab.t_s, ab.peak_kpa, Math.min(t, ab.t_s[ab.t_s.length - 1]));   // kPa at the front now
+          const st = Math.min(1, Math.max(0, Math.log10(Math.max(pk, 0.05) / 0.05) / Math.log10(400 / 0.05)));
+          sound?.boom(st); shake(st);
+        }
+      }
+      const ws = data.water_shock;
+      if (under && ws && !heard.has("thud") && ws.speed_m_s * t >= Math.hypot(cam.x, cam.y - (ws.source_z_m ?? bz), cam.z)) {
+        heard.add("thud"); sound?.boom(0.6, true); shake(0.5);
+      }
+      if (wv && !heard.has("wave") && Math.abs(cam.y) < 80) {
+        const rMax = wv.max_wave_speed_m_s * t, dh = Math.hypot(cam.x, cam.z);
+        if (rMax >= dh && tPrev * wv.max_wave_speed_m_s < dh) { heard.add("wave"); sound?.wash(0.5); }
+      }
+    }
+    // shake the camera for a moment after the blast reaches it
+    const age = (now - shakeAt) / 1000;
+    if (age < 1.6) {
+      const a = shakeAmp * Math.exp(-age * 3) * Math.max(1, dBurst * 0.0015);
+      shakeOff.set((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+      camera.position.add(shakeOff);
+    }
   }
+  const shakeOff = new THREE.Vector3(), heard = new Set();
+  let shakeAt = -1e9, shakeAmp = 0, lastSimT = 0;
+  function shake(strength) { shakeAt = performance.now(); shakeAmp = 2 + 10 * strength; }
 
   function updateCloud(t, y, bz, data, fb) {
     const show = (on) => { cloud.visible = on; };

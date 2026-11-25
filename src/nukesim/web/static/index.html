@@ -34,9 +34,11 @@
       <button data-view="realistic" title="Realistic view: ocean, sky, fireball and cloud, driven by the timeline (R)">Realistic</button>
     </div>
     <div class="seg" id="detailSeg" aria-label="Detail level">
-      <button data-detail="basic" class="on" title="Key numbers and plain wording (X switches)">Basic</button>
-      <button data-detail="expert" title="Every criterion, source, uncertainty setting and caveat (X switches)">Expert</button>
+      <button data-detail="simple" class="on" title="For anyone: pick a bomb, press detonate, watch what happens (X switches)">Simple</button>
+      <button data-detail="basic" class="classicOnly" title="The older Basic level: the full panels with plain labels">Basic</button>
+      <button data-detail="expert" title="Every number, criterion, source, uncertainty setting and caveat (X switches)">Expert</button>
     </div>
+    <button id="muteBtn" class="tb icon" title="Sound on / off (M)">🔊</button>
     <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset">⚙</button>
     <button id="helpBtn" class="tb" title="Help, tour and keyboard shortcuts">? <span class="tbl">Help</span> ▾</button>
   </header>
@@ -190,7 +192,8 @@
         <span><kbd>Esc</kbd></span><span>let go of the mouse</span>
         <h4>Interface</h4>
         <span><kbd>T</kbd> <kbd>R</kbd></span><span>technical / realistic view</span>
-        <span><kbd>X</kbd></span><span>basic / expert detail</span>
+        <span><kbd>X</kbd></span><span>simple / expert</span>
+        <span><kbd>M</kbd></span><span>sound on / off</span>
         <span><kbd>[</kbd> <kbd>]</kbd></span><span>hide / show the side panels</span>
         <span><kbd>Delete</kbd></span><span>remove the selected thing</span>
         <span><kbd>⌘/Ctrl</kbd> <kbd>Z</kbd></span><span>undo removing it</span>
@@ -223,6 +226,7 @@
       </div>
       <label class="check"><input id="autoPlay" type="checkbox" checked> Play the timeline when switching to the realistic view</label>
       <label class="check"><input id="showPins" type="checkbox" checked> Show marker pins in the realistic view</label>
+      <label class="check"><input id="classicBasic" type="checkbox"> Show the older "Basic" level (the full panels with plain labels) as well as Simple and Expert</label>
       <label class="check"><input id="reactions" type="checkbox" checked> Animate injuries on the 3D models (a jolt when the blast hits, badly hurt animals roll over, burned skin darkens; illustrative)</label>
       <div class="cardButtons">
         <button id="resetPrefs" class="ghost" title="Forget layout, units and preferences (saved scenarios are kept)">Reset layout &amp; preferences</button>

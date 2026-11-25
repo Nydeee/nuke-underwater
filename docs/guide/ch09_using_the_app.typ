@@ -77,20 +77,41 @@ the side panels, to give the view more room. Drag a panel's inner edge to make i
   selected fish or person (chapters 4 and 7).
 - *Show uncertainty* adds the likely range to each number (chapter 10).
 
-== Basic and Expert
+== Simple, Expert (and the older Basic)
 
-Both modes use exactly the same physics; they only change what is *shown*.
+All levels use exactly the same physics; they only change what is *shown* and how you use it.
 
-#table(
-  columns: (auto, 1fr), stroke: 0.4pt + luma(180), inset: 6pt,
-  table.header([*Mode*], [*What you see*]),
-  [Basic], [The key numbers for every effect (pressures, doses, burn energy, wave heights), with
-    plain labels such as "Where" for the burst position. Still technical, just less cluttered.],
-  [Expert], [Everything in Basic, plus the threshold each level is judged against and its source,
-    the fission share, the number of uncertainty runs, the stretch of the water view, technical
-    labels (for example "height of burst (HOB) / depth of burst (DOB)"), the caveats list opened
-    by default, and a box listing what the realistic view draws only approximately.],
-)
+*Simple* is what the app opens with, and is meant for anyone:
++ Pick a bomb, from *Small* (1 kiloton) to *Tsar Bomba-size* (50 megatons, the largest ever tested).
++ Pick where it goes off: high in the sky, on the water, or just underwater.
++ Pick what is in the sea: a few fish, dolphins and whales, boats and ships, or "fill the sea".
++ Press *Detonate*. After a 3-2-1 countdown the event plays as a short film. The camera moves by
+  itself (a close look at the flash, then a boat as the blast arrives, then a wide view of the
+  cloud), and captions explain each step with numbers from the simulator, for example when the
+  blast reaches each boat, how wide the fireball gets and how high the cloud climbs compared with
+  Mount Everest.
++ At the end, *What happened* gives each animal, person or ship a one-line verdict ("Would not
+  survive", "Injured", "Unharmed"...) and the reason in plain words ("the pressure wave burst its
+  swim bladder"). *Why? The numbers* shows the numbers behind it.
+
+The film's playback speed changes as it goes: very slow-motion for the first second (so the flash
+and fireball can be seen), close to real time while the blast passes, then faster while the cloud
+rises. The things in the sea are placed at distances that scale with the cube root of the yield, so
+every bomb size shows a range from "would not survive" to "unharmed".
+
+*Sound* (the speaker button or `M`) is timed by the physics:
+- the boom comes when the simulator's blast front actually reaches the camera, so far away it comes
+  late, as in real life;
+- under water you hear a muffled thud when the shock in the water arrives;
+- there is a wash when the big waves pass.
+
+The sound itself is synthesised, not a recording.
+
+*Expert* shows everything: the panels, the technical cut-away view, every criterion, source,
+uncertainty setting and caveat.
+
+The older *Basic* level (the full panels, with plain labels) is still there: tick "Show the older
+Basic level" in *Settings* to bring its button back.
 
 == The technical view
 

@@ -8,6 +8,8 @@ import { initTimeline } from "./timeline.js";   // time slider (see timeline.js)
 import { makeModel } from "./models.js";
 import { setBase, pose } from "./reactions.js";
 import { createBodyView } from "./bodyview.js";
+import { initSimple } from "./simple.js";
+import { createSound } from "./sound.js";
 import { fmtTime } from "./timeline.js";
 import { SPECIES, speciesOf, speciesIn, GROUPS } from "./species.js";
 import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
@@ -675,12 +677,40 @@ function setStatus(text, busy = false) {
 }
 
 // ---------------------------------------------------------------- preferences (this browser only)
-const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "basic", reactions: true, followTL: true },
+const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "simple", reactions: true, followTL: true, classicBasic: false },
   store.get("prefs", {}));
 const savePrefs = () => store.set("prefs", prefs);
 
 // ---------------------------------------------------------------- view mode, detail level, camera bar
-let mode = "technical", detail = "basic", realistic = null;
+let mode = "technical", detail = "basic", realistic = null, simple = null;
+const sound = createSound();
+function toggleMute() {
+  sound.setMuted(!sound.muted);
+  $("muteBtn").textContent = sound.muted ? "🔇" : "🔊";
+  toast(sound.muted ? "Sound off" : "Sound on");
+}
+$("muteBtn").addEventListener("click", toggleMute);
+$("muteBtn").textContent = sound.muted ? "🔇" : "🔊";
+
+// Simple mode puts a whole scene together from its three choices
+function simpleSetup({ kt, z_m, items }) {
+  const mt = kt >= 1000;
+  $("yield").value = mt ? kt / 1000 : kt; $("yieldUnit").value = mt ? "1000" : "1";
+  $("side").value = z_m < 0 ? "below" : "above"; writeInput($("burstDist"), Math.abs(z_m));
+  $("deepOcean").checked = true; $("waterDepth").disabled = true;
+  $("presetSel").value = "";
+  state.receivers = []; state.results = {}; state.nextId = 1; state.selected = null;
+  for (const it of items) {
+    addReceiver(it.key);
+    const r = state.receivers[state.receivers.length - 1];
+    r.x_m = it.x; r.y_m = 0; r.z_m = onSurface(r) ? 2 : it.z;
+  }
+  state.selected = state.receivers[0]?.id ?? null;
+  writeInput($("maxRange"), Math.max(...items.map((i) => i.x)) * 1.25 / 1000);
+  writeInput($("maxDepth"), Math.max(50, ...items.map((i) => -i.z + 10)));
+  buildReceivers(); renderList(); refreshScenario();
+  realistic.rebuildReceivers();
+}
 
 const CAMS = {
   technical: [["overview", "Overview"], ["side", "Side-on"], ["top", "Top-down"], ["burst", "Burst close-up"]],
@@ -691,7 +721,7 @@ function buildCamBar() {
   $("camBar").innerHTML = `<span class="lbl">Camera</span>` +
     list.map(([k, l], i) => `<button data-cam="${k}" title="${l} (${i + 1})">${l}</button>`).join("") +
     `<button data-cam="free" class="free" title="Fly freely with W A S D and the mouse (F)">✈ Free <kbd>F</kbd></button>`;
-  $("camBar").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setCam(b.dataset.cam)));
+  $("camBar").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { simple?.lockCamera(); setCam(b.dataset.cam); }));
   markCam();
 }
 let currentCam = "overview";
@@ -756,16 +786,26 @@ function setMode(m) {
   buildCamBar();
   if (real) {
     realistic.setPreset("aerial", true);
-    if (prefs.autoPlay && timeline.isAtEnd()) { timeline.setTime(0); timeline.play(); }   // start the show from the flash
+    if (prefs.autoPlay && detail !== "simple" && timeline.isAtEnd()) { timeline.setTime(0); timeline.play(); }   // start the show from the flash
   }
 }
 
+// Detail levels: "simple" (for anyone: start screen, film, plain words), "expert" (everything), and the
+// older "basic" level (the standard panels with plain labels), kept and shown only if switched on in Settings.
 function setDetail(d) {
+  if (d === "basic" && !prefs.classicBasic) d = "simple";
+  const wasSimple = detail === "simple";
   detail = d; prefs.detail = d; savePrefs();
+  document.body.classList.toggle("simple", d === "simple");
   document.body.classList.toggle("basic", d === "basic");
   document.body.classList.toggle("expert", d === "expert");
   document.querySelectorAll("#detailSeg button").forEach((b) => b.classList.toggle("on", b.dataset.detail === d));
-  document.querySelectorAll("[data-basic]").forEach((el) => { el.textContent = el.dataset[d]; });
+  document.querySelectorAll("[data-basic]").forEach((el) => { el.textContent = el.dataset[d === "expert" ? "expert" : "basic"]; });
+  if (d === "simple") {
+    setMode("realistic");
+    if (simple && simple.state !== "film" && simple.state !== "results") simple.show("start");
+  } else if (wasSimple && simple) { simple.show("none"); bodyView?.close(); }
+  resize();
   renderReport();
 }
 
@@ -975,6 +1015,17 @@ attachMenu($("helpBtn"), () => [
 ]);
 function startTour() {
   closeModal("helpModal"); store.set("helpSeen", 1);
+  if (detail === "simple") {
+    if (simple.state !== "start") simple.show("start");
+    return runTour([
+      { el: '.spCards[data-group="bomb"]', title: "Pick a bomb", text: "From a small 1-kiloton bomb up to the largest ever tested, the 50-megaton Tsar Bomba." },
+      { el: '.spCards[data-group="where"]', title: "Where it goes off", text: "High in the sky, right on the water, or just under the surface. Each looks and acts very differently." },
+      { el: '.spCards[data-group="sea"]', title: "What's in the sea", text: "Fish, dolphins and whales, boats and ships, or a bit of everything at different distances." },
+      { el: ".spGo", title: "Detonate", text: "Then sit back: the camera follows the flash, the blast, the waves and the mushroom cloud, with captions explaining each step." },
+      { el: "#muteBtn", title: "Sound", text: "The boom arrives late if you're far away, just as it would in real life. Turn the sound on or off here (or press <kbd>M</kbd>)." },
+      { el: "#detailSeg", title: "Want all the numbers?", text: "<b>Expert</b> shows every pressure, dose and source, the scientific cut-away view, and lets you set up anything you like." },
+    ]);
+  }
   if (prefs.hideLeft) togglePanel("left"); if (prefs.hideRight) togglePanel("right");
   runTour([
     { el: "#presetSel", title: "Start from an example", text: "Pick a ready-made scenario, such as a Hiroshima-sized air burst or the 1946 BAKER test. It fills in everything for you." },
@@ -1003,6 +1054,11 @@ function setQuality(q) {
 }
 document.querySelectorAll("#qualitySeg button").forEach((b) => b.addEventListener("click", () => setQuality(b.dataset.quality)));
 $("autoPlay").addEventListener("change", (e) => { prefs.autoPlay = e.target.checked; savePrefs(); });
+$("classicBasic").addEventListener("change", (e) => {
+  prefs.classicBasic = e.target.checked; savePrefs();
+  document.body.classList.toggle("classic", prefs.classicBasic);
+  if (!prefs.classicBasic && detail === "basic") setDetail("simple");
+});
 $("reactions").addEventListener("change", (e) => { prefs.reactions = e.target.checked; savePrefs(); });
 $("followTL").addEventListener("change", (e) => { prefs.followTL = e.target.checked; savePrefs(); state.followTimeline = e.target.checked; lastStatusKey = null; });
 $("showPins").addEventListener("change", (e) => { prefs.pins = e.target.checked; savePrefs(); realistic.setPins(prefs.pins); });
@@ -1074,7 +1130,8 @@ window.addEventListener("keydown", (e) => {
     case "f": case "F": setCam("free"); break;
     case "t": case "T": setMode("technical"); break;
     case "r": case "R": setMode("realistic"); break;
-    case "x": case "X": setDetail(detail === "basic" ? "expert" : "basic"); break;
+    case "x": case "X": setDetail(detail === "expert" ? "simple" : "expert"); break;
+    case "m": case "M": toggleMute(); break;
     case "[": togglePanel("left"); break;
     case "]": togglePanel("right"); break;
     case "p": case "P": screenshot(); break;
@@ -1094,6 +1151,7 @@ $("presetSel").addEventListener("change", (e) => { applyScenario(e.target.value)
 layoutPanels();
 applyQuality(prefs.quality);
 document.querySelectorAll("#qualitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.quality === prefs.quality));
+$("classicBasic").checked = prefs.classicBasic; document.body.classList.toggle("classic", prefs.classicBasic);
 $("autoPlay").checked = prefs.autoPlay; $("reactions").checked = prefs.reactions; $("followTL").checked = prefs.followTL; state.followTimeline = prefs.followTL; $("showPins").checked = prefs.pins;
 writeInput($("wind"), 15);            // canonical wind is 15 mph, shown in the chosen units
 if (prefs.units !== "metric") applyUnits(prefs.units);
@@ -1101,10 +1159,18 @@ resize();
 frameCamera();
 // ---------------------------------------------------------------- timeline hook (everything else is in timeline.js)
 timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
-realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info, colorOf, reactionsOn: () => prefs.reactions });
+realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info, colorOf, reactionsOn: () => prefs.reactions, sound });
 realistic.setPins(prefs.pins);
 realistic.setConditions(conditions());
 $("viewNotes").innerHTML = realistic.notes.map((n) => `<li>${esc(n)}</li>`).join("");
+// ---- sound and Simple mode
+simple = initSimple({
+  timeline, realistic, sound, state, scenario, worstSoFar,
+  getResults: () => state.results,
+  setup: simpleSetup,
+  toExpert: () => setDetail("expert"),
+  setCam: (name) => { if (freecam.active) return; currentCam = name; realistic.setPreset(name); markCam(); },
+});
 setDetail(prefs.detail);
 buildCamBar();
 resize();
@@ -1125,6 +1191,7 @@ const nextFrame = location.search.includes("pump") ? (cb) => setTimeout(() => cb
       pose(m, followTL() ? byId[m.userData.id] : null, timeline.getTime(), { on: prefs.reactions, scale: m.userData.size, awayX: 1 });
   }
   freecam.update(dt);
+  if (detail === "simple") simple.update(dt);
   if (mode === "realistic") { realistic.update(); renderer.render(realistic.scene, realistic.camera); }
   else { if (controls.enabled) { techTween.update(); controls.update(); } renderer.render(scene, camera); }
 })();
@@ -1141,4 +1208,4 @@ if (!opened) {
   addReceiver("boat");
   refreshScenario();
 }
-if (!store.get("helpSeen", false) && !opened) openModal("helpModal");
+if (!store.get("helpSeen", false) && !opened && detail !== "simple") openModal("helpModal");

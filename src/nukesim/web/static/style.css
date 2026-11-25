@@ -354,3 +354,79 @@ body.underwater main::after {   /* soft dark vignette, like looking through a di
 #recBadge .dotRec { width: 10px; height: 10px; border-radius: 50%; background: #ff3b2f; animation: blink 1s infinite; }
 #recBadge button { padding: 2px 10px; border-radius: 999px; background: #b83a2e; border-color: #b83a2e; color: #fff; }
 @keyframes blink { 50% { opacity: .25; } }
+
+/* ---------------------------------------------------------------- Simple mode */
+body:not(.classic) .classicOnly { display: none; }
+body.simple { grid-template-columns: 0 1fr 0 !important; }
+body.simple #controls, body.simple #results, body.simple .edgeTab, body.simple .splitter, body.simple #burstInfo,
+body.simple #tlNow, body.simple #viewSeg, body.simple .preset, body.simple #saveBtn, body.simple .divider, body.simple #bodyView { display: none !important; }
+body:not(.simple) #simple { display: none; }
+body.spOverlay #camBar, body.spOverlay #status, body.spOverlay #timeline { visibility: hidden; }
+body.simple #status { display: none; }
+#simple { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+#simple > * { pointer-events: auto; }
+.spStart {
+  position: absolute; inset: 0; overflow-y: auto; padding: 28px 24px 40px; text-align: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(14,30,48,.82), rgba(5,9,14,.94));
+  backdrop-filter: blur(4px);
+}
+.spStart h1 { font-size: clamp(20px, 3.2vw, 32px); margin: 4px 0 18px; letter-spacing: -.01em; }
+.spStep { display: flex; gap: 14px; justify-content: center; align-items: flex-start; margin: 0 auto 16px; max-width: 980px; text-align: left; }
+.spNum { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--accent2); display: grid; place-items: center; font-weight: 800; margin-top: 2px; }
+.spBody { flex: 1; min-width: 0; }
+.spBody h3 { margin: 4px 0 8px; font-size: 16px; }
+.spCards { display: flex; gap: 10px; flex-wrap: wrap; }
+.spCard {
+  flex: 1 1 140px; max-width: 190px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 10px;
+  background: rgba(20,33,48,.9); border: 1.5px solid var(--line2); border-radius: 12px; text-align: center; transition: transform .1s, border-color .12s, background .12s;
+}
+.spCard:hover { transform: translateY(-2px); border-color: #4f7aa0; }
+.spCard.on { border-color: #ff8a3d; background: rgba(60,34,18,.85); box-shadow: 0 0 0 3px rgba(255,138,61,.25); }
+.spCard b { font-size: 14px; }
+.spCard small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.spIcon { font-size: 30px; line-height: 1.2; }
+.spBoom { display: block; border-radius: 50%; margin: 6px 0; background: radial-gradient(circle, #fff7d6 0%, #ffc04d 35%, #ff6a1a 65%, rgba(255,80,20,0) 72%); }
+.spBoom.s1 { width: 18px; height: 18px; margin: 15px 0; } .spBoom.s2 { width: 26px; height: 26px; margin: 11px 0; } .spBoom.s3 { width: 34px; height: 34px; margin: 7px 0; }
+.spBoom.s4 { width: 42px; height: 42px; margin: 3px 0; } .spBoom.s5 { width: 48px; height: 48px; margin: 0; }
+.spGo {
+  margin: 10px auto 8px; padding: 14px 42px; font-size: 20px; font-weight: 800; letter-spacing: .02em; border-radius: 999px; color: #fff;
+  background: linear-gradient(180deg, #ff5a3a, #c22a16); border: 0; box-shadow: 0 8px 26px rgba(226,70,40,.45), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.spGo:hover { filter: brightness(1.1); transform: scale(1.03); }
+.spNote { color: var(--muted); font-size: 12px; max-width: 620px; margin: 8px auto 0; }
+.spCount { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(80px, 16vw, 180px); font-weight: 900; color: #fff;
+  text-shadow: 0 0 40px rgba(255,120,60,.8); background: rgba(3,6,10,.55); pointer-events: none; }
+.spCaption {
+  position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); text-align: center;
+  padding: 10px 18px; border-radius: 12px; font-size: clamp(14px, 1.7vw, 18px); line-height: 1.4; font-weight: 600;
+  background: rgba(6,10,16,.72); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(6px); pointer-events: none;
+}
+.spCaption.in { animation: capIn .45s ease-out; }
+@keyframes capIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.spCaption:empty { display: none; }
+.spBar { position: absolute; top: 12px; left: 14px; display: flex; gap: 6px; }
+.spBar button { border-radius: 999px; background: rgba(10,17,25,.82); backdrop-filter: blur(6px); }
+.spResults {
+  position: absolute; right: 14px; top: 12px; bottom: 140px; width: min(380px, calc(100% - 28px)); display: flex; flex-direction: column;
+  background: rgba(9,15,22,.93); border: 1px solid var(--line2); border-radius: 14px; box-shadow: var(--shadow); animation: pop .2s ease-out;
+}
+.spResHead { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 6px; }
+.spResHead button { background: transparent; border-color: transparent; color: var(--muted); }
+.spResBody { overflow-y: auto; padding: 0 12px; flex: 1; }
+.spRes { border-left: 4px solid var(--c); background: rgba(20,33,48,.7); border-radius: 10px; padding: 9px 11px; margin-bottom: 8px; }
+.spResTop { display: flex; gap: 10px; align-items: center; }
+.spEmoji { font-size: 28px; }
+.spResTop small { color: var(--muted); }
+.spVerdict { font-weight: 800; font-size: 15px; color: var(--c); }
+.spWhy { margin: 5px 0 2px; color: #d3dde7; }
+.spRes details { margin-top: 4px; border: 0; padding: 0; }
+.spRes summary { font-size: 12px; color: var(--muted); font-weight: 500; padding: 2px 0; }
+.spRes ul { padding-left: 16px; margin: 4px 0; font-size: 12px; color: #c4d0dc; }
+.spResFoot { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.spResFoot button { flex: 1 1 auto; }
+.spExpert { background: transparent; }
+@container main (max-width: 760px) {
+  .spResults { left: 14px; width: auto; top: auto; bottom: 140px; max-height: 55%; }
+  .spCaption { bottom: 140px; }
+  body.simple .spResults:not([hidden]) ~ .spCaption { display: none; }
+}
