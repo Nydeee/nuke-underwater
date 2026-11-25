@@ -40,6 +40,52 @@ SOURCES: dict[str, Source] = {
         ),
         notes="Eqs. (1)-(4), pp. 2-4: TNT similitude equations quoted from Cole (1948).",
     ),
+    "brode1987": Source(
+        key="brode1987",
+        citation=(
+            "Brode, H. L. (1987). Airblast from Nuclear Bursts - Analytic Approximations. "
+            "Pacific-Sierra Research Corp., PSR Report 1419-3."
+        ),
+        url="https://archive.org/download/airblastfromnucl00brod/airblastfromnucl00brod.pdf",
+        notes=(
+            "Eqs. 33 (p.26), 39-40 (p.31), 43 and 45 (p.36), 48 (p.38), 62 (pp.70-71). "
+            "All coefficients checked against the page scans."
+        ),
+    ),
+    "friedlander1946": Source(
+        key="friedlander1946",
+        citation=(
+            "Friedlander, F. G. (1946). The diffraction of sound pulses. I. Diffraction by a "
+            "semi-infinite plane. Proc. R. Soc. Lond. A 186, 322-344."
+        ),
+        notes="Origin of the standard blast-wave shape p(t) = P (1 - t/D) exp(-b t/D).",
+    ),
+    "sparrow1995": Source(
+        key="sparrow1995",
+        citation=(
+            "Sparrow, V. W. (1995). The effect of aircraft speed on the penetration of sonic "
+            "boom noise into a flat ocean. NASA N95-14887, pp. 137-150."
+        ),
+        url="https://ntrs.nasa.gov/api/citations/19950008473/downloads/19950008473.pdf",
+        notes=(
+            "p.141: air/water impedances, 13.2 deg critical angle, pressure continuity. "
+            "p.144-146: Sawyers (1968) closed-form N-wave solution; p.143: decay examples."
+        ),
+    ),
+    "sawyers1968": Source(
+        key="sawyers1968",
+        citation="Sawyers, K. N. (1968). Underwater sound pressure from sonic booms. J. Acoust. Soc. Am. 44, 523-524.",
+        notes="Read via sparrow1995; original not consulted.",
+    ),
+    "sohn2000": Source(
+        key="sohn2000",
+        citation=(
+            "Sohn, R. A., Vernon, F., Hildebrand, J. A. & Webb, S. C. (2000). Field measurements "
+            "of sonic boom penetration into the ocean. J. Acoust. Soc. Am. 107(6), 3073-3083."
+        ),
+        url="https://www.cetus.ucsd.edu/docs/publications/SohnJASA2000.pdf",
+        notes="Measured booms decay to ambient by 40-50 m depth; flat-interface theory agrees.",
+    ),
 }
 
 

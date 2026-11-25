@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import typst
 
+from nukesim.effects import air_blast as ab
+from nukesim.effects import air_to_water as aw
 from nukesim.effects import underwater_shock as us
 from nukesim.scenario import Burst, Environment, Receiver
 
@@ -104,8 +106,61 @@ def fig_cutoff_depths():
     save(fig, "cutoff_depths.png")
 
 
+def fig_surface_overpressure():
+    r = np.linspace(0, 4000, 400)
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    for h in (100, 300, 500, 1000):
+        ax.semilogy(r, [ab.peak_overpressure_pa(20, h, x) / 1e3 for x in r], label=f"burst {h} m up")
+    ax.set(xlabel="distance from ground zero (m)", ylabel="peak overpressure on water (kPa)",
+           title="20 kt: blast pressure on the water surface")
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+    save(fig, "surface_overpressure.png")
+
+
+def fig_trace_speed():
+    r = np.linspace(0, 3000, 600)
+    v = np.array([ab.trace_speed_m_s(20, 500, x) for x in r])
+    fig, ax = plt.subplots(figsize=(6.5, 3.4))
+    ax.semilogy(r, v)
+    ax.axhline(1500, c="C3", ls="--")
+    ax.text(1500, 1650, "speed of sound in water (1,500 m/s)", color="C3", fontsize=8)
+    ax.axhline(340, c="gray", ls=":")
+    ax.text(1500, 360, "speed of sound in air", color="gray", fontsize=8)
+    ax.set(xlabel="distance from ground zero (m)", ylabel="trace speed (m/s)", ylim=(200, 1e5),
+           title="20 kt at 500 m: how fast the blast sweeps across the water")
+    ax.grid(True, which="both", alpha=0.3)
+    save(fig, "trace_speed.png")
+
+
+def fig_water_map():
+    from matplotlib.colors import LogNorm
+
+    burst = Burst(yield_kt=20, z_m=500)
+    ranges = np.linspace(0, 3000, 60)
+    depths = np.linspace(0, 200, 40)
+    peak = np.array([[aw.compute(burst, Receiver(r, 0, -d), n_samples=2**13).peak_overpressure_pa for r in ranges] for d in depths])
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.2))
+    im = a1.pcolormesh(ranges, depths, peak / 1e3, norm=LogNorm(), shading="auto", cmap="viridis")
+    fig.colorbar(im, ax=a1, label="peak overpressure (kPa)")
+    cs = a1.contour(ranges, depths, peak / 1e3, levels=[3, 10, 30, 100], colors="white", linewidths=0.7)
+    a1.clabel(cs, fmt="%g kPa", fontsize=7)
+    a1.axvline(171, c="r", ls="--", lw=1)
+    a1.invert_yaxis()
+    a1.set(xlabel="distance from ground zero (m)", ylabel="depth (m)", title="Peak pressure in the water")
+    for d in (0, 10, 50, 150):
+        res = aw.compute(burst, Receiver(1000, 0, -d))
+        a2.plot((res.t - res.surface.arrival_time_s) * 1e3, res.p / 1e3, label=f"{d} m deep")
+    a2.set(xlim=(-200, 800), xlabel="time after blast reaches the surface above (ms)", ylabel="overpressure (kPa)",
+           title="1 km from ground zero")
+    a2.grid(True, alpha=0.3)
+    a2.legend()
+    save(fig, "water_map.png")
+
+
 def main():
-    for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths):
+    for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
+              fig_surface_overpressure, fig_trace_speed, fig_water_map):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))

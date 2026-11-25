@@ -9,8 +9,8 @@ your time. Everything else is built on it.
 
 == What the simulator is (and is not)
 
-The simulator answers questions like: _"A 20-kiloton weapon explodes 27 metres
-underwater. What does a fish 500 metres away, 3 metres below the surface, experience?"_
+The simulator answers questions like: _"A 20-kiloton weapon explodes 500 metres
+above the sea. What does a fish 1 kilometre away, 10 metres below the surface, experience?"_
 
 It does *not* simulate every water molecule. Even supercomputers cannot do that for a
 whole explosion. It uses *models*: equations fitted to measurements from real tests,

@@ -7,5 +7,6 @@
 
 #include "ch00_basics.typ"
 #include "ch01_underwater_shock.typ"
+#include "ch02_air_blast_into_water.typ"
 #include "glossary.typ"
 #include "references.typ"

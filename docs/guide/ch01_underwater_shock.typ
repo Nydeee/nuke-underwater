@@ -4,6 +4,10 @@
 
 _Simulator section 1. Code: `src/nukesim/effects/underwater_shock.py`._
 
+This chapter covers bursts *below* the water surface. That's an optional mode of the
+simulator: its main focus, bursts above the water, is chapter 2. The ideas here (shock
+waves, impulse, scaling, surface reflection) are needed for both.
+
 == What happens in the first instant
 
 When a nuclear weapon detonates underwater, its energy is released in less than a
