@@ -147,26 +147,30 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
   });
   q(".tl-end").addEventListener("click", () => { setT(tEnd); playing = false; playBtn.textContent = "▶"; });
   window.addEventListener("keydown", (ev) => {
-    if (ev.code !== "Space" || document.body.classList.contains("flying") || document.querySelector(".modal:not([hidden]), .tourCard")
+    if (ev.code !== "Space" || document.body.classList.contains("flying") || document.body.classList.contains("spFilm") || document.querySelector(".modal:not([hidden]), .tourCard")
       || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(document.activeElement?.tagName)) return;
     ev.preventDefault(); playBtn.click();
   });
 
   // ---------- fetching the time series (whenever the scenario or the receivers change)
-  let lastKey = "", pending = null, keyCheck = 0;
+  let lastKey = "", pending = null, keyCheck = 0, lastError = null;
   const payload = () => {
     const sc = scenario();
     return { ...sc, days: tEnd / 86400, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type }) =>
       ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type })) };
   };
+  let fetching = false, fetchedKey = null;
   async function fetchTimeline(body) {
+    fetching = true;
     try {
       const res = await fetch("/api/timeline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json();
-      if (!res.ok) throw new Error(typeof j.detail === "string" ? j.detail : "invalid scenario");
-      data = j; tEnd = j.t_end_s; dirty = true;
-      drawTicks(); drawMarkers();
-    } catch (err) { data = null; now.innerHTML = `<b>Timeline</b><div class="tl-err">${esc(err.message)}</div>`; drawMarkers(); }
+      if (!res.ok) throw new Error(typeof j.detail === "string" ? j.detail
+        : /Input should be/.test(JSON.stringify(j.detail)) ? 'the app\u2019s server is running older code than this page. Restart it: stop it with Ctrl+C, then run "uv run nukesim-web" again.'
+        : "invalid scenario");
+      data = j; tEnd = j.t_end_s; dirty = true; lastError = null; fetchedKey = JSON.stringify(body);
+      fetching = false; drawTicks(); drawMarkers();
+    } catch (err) { fetching = false; data = null; lastError = err.message; now.innerHTML = `<b>Timeline</b><div class="tl-err">${esc(err.message)}</div>`; drawMarkers(); }
   }
   function checkForChanges(ts) {
     if (ts - keyCheck < 250) return;
@@ -408,6 +412,8 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
     play: () => { if (!playing) playBtn.click(); },                        // used by realistic.js
     isAtEnd: () => t >= tEnd,
     isPlaying: () => playing,
+    getError: () => lastError,                                             // why the last fetch failed (or null)
+    upToDate: () => !!data && !fetching && fetchedKey === JSON.stringify(payload()),   // data for exactly this scenario
     togglePlay: () => playBtn.click(),
     pause: () => { if (playing) playBtn.click(); },
     step: (dir) => setT(tOf(Math.min(Math.max(uOf(Math.max(t, T0)) + 0.02 * dir, 0), 1))),   // 1/50 of the slider

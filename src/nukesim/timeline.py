@@ -166,44 +166,104 @@ def bubble_max_radius_m(yield_kt: float, depth_m: float) -> float:
     return COLE_BUBBLE_J_FT * (w_lb / (z_ft + 33.0)) ** (1.0 / 3.0) * units.FT_TO_M
 
 
-def _bubble(b: Burst, env: Environment, notes: list[str]) -> dict | None:
-    """Gas bubble of an underwater burst: radius vs time over its first expansion and collapse.
+# Later bubble pulses. Snay et al. (1957), Operation WIGWAM predictions (DTIC AD0338338) sec. 3.5:
+# measured periods of the first three cycles of the WIGWAM bubble (30 kt at 2,000 ft): 2.87, 2.6, 1.9 s,
+# i.e. ratios 1 : 0.91 : 0.66 (a real nuclear, partly steam, bubble). Glasstone secs. 2.88 / 6.51: two or
+# three cycles, more are unlikely.
+WIGWAM_PERIOD_RATIOS = (1.0, 0.91, 0.66)
+# How far the bubble rose between maxima 1->2 and 2->3 in Snay's WIGWAM calculation (675 ft and 793 ft), as
+# multiples of its first maximum radius (~316 ft). Scaling the rise with the bubble size is OUR assumption.
+WIGWAM_RISE_PER_RMAX = (675.0 / 316.0, 793.0 / 316.0)
 
-    Rayleigh's equation for an empty cavity in incompressible water (gas pressure neglected),
-    written so it reaches the Cole maximum radius: with R = R_max * sin(phi)^(2/3),
-    t = R_max * sqrt(rho / P) * sqrt(3/2) * (2/3) * integral_0^phi sin(psi)^(2/3) dpsi,
-    which gives the classic time to maximum 0.915 R_max sqrt(rho / P).
+
+def _rayleigh_shape(n: int = 200) -> tuple[np.ndarray, np.ndarray]:
+    """One expansion-collapse cycle of radius / R_max against time / period (Rayleigh, empty cavity)."""
+    phi = np.linspace(0.0, math.pi, n)
+    integrand = np.abs(np.sin(phi)) ** (2.0 / 3.0)
+    integral = np.concatenate([[0.0], np.cumsum(0.5 * (integrand[1:] + integrand[:-1]) * np.diff(phi))])
+    return integral / integral[-1], integrand
+
+
+def _bubble(b: Burst, env: Environment, notes: list[str]) -> dict | None:
+    """Gas bubble of an underwater burst: radius and position vs time, over up to three pulsation cycles.
+
+    First cycle: Rayleigh's equation for an empty cavity in incompressible water (gas pressure neglected),
+    written so it reaches the Cole maximum radius: the time to maximum is 0.915 R_max sqrt(rho / P), so the
+    first period is twice that. Later cycles: periods in the ratios measured at WIGWAM (Snay 1957), and
+    the maximum radius in proportion to the period (for a bubble at fixed depth the energy goes as the
+    period cubed and the radius as the cube root of the energy, Snay 1957 p. 60). The bubble does not rise
+    before its first maximum, then rises by the WIGWAM amounts per cycle (scaled with the bubble size).
+    It vents if its top reaches the surface.
     """
     if b.z_m >= 0:
         return None
     depth = -b.z_m
-    r_max = bubble_max_radius_m(b.yield_kt, depth)
+    r1 = bubble_max_radius_m(b.yield_kt, depth)
     p = env.hydrostatic_pressure_pa(depth)
-    phi = np.linspace(0.0, math.pi, 400)
-    integrand = np.abs(np.sin(phi)) ** (2.0 / 3.0)
-    integral = np.concatenate([[0.0], np.cumsum(0.5 * (integrand[1:] + integrand[:-1]) * np.diff(phi))])
-    t = r_max * math.sqrt(env.density_kg_m3 / p) * math.sqrt(1.5) * (2.0 / 3.0) * integral
-    r = r_max * integrand
-    scaled = depth * units.M_TO_FT / b.yield_kt ** (1.0 / 3.0)
-    vents = r_max >= depth
-    vent_s = None
-    if vents:   # the top of the bubble reaches the surface while it is still growing: it vents (sec. 2.67)
-        k = int(np.argmax(r >= depth))
-        vent_s = float(np.interp(depth, r[: k + 1], t[: k + 1]))
-        keep = t <= vent_s
-        t, r = np.append(t[keep], vent_s), np.append(r[keep], depth)
+    t_max1 = 0.915 * r1 * math.sqrt(env.density_kg_m3 / p)
+    T1 = 2.0 * t_max1
+    u, shape = _rayleigh_shape()
     floor = env.water_depth_m if math.isfinite(env.water_depth_m) else None
-    notes.append("Gas bubble: largest size from Cole's (1948) TNT bubble law, using the same TNT equivalent as the "
-                 "water shock (an assumption: Glasstone gives no bubble size); growth and collapse follow Rayleigh's "
-                 "bubble equation, which ignores the gas pressure inside, the bubble rising, and the later "
-                 "pulsations (Glasstone secs. 2.86-2.88: two or three more cycles).")
+    ts, rs, zs, cycles, pulses = [], [], [], [], []
+    start = 0.0
+    # times of the maxima, and the centre depth at each (for the rise)
+    t_maxes, z_at_max = [], []
+    for n, ratio in enumerate(WIGWAM_PERIOD_RATIOS):
+        T = T1 * ratio
+        t_maxes.append(start + T / 2)
+        start += T
+    z_at_max.append(b.z_m)
+    for k, rise in enumerate(WIGWAM_RISE_PER_RMAX):
+        z_at_max.append(z_at_max[-1] + rise * r1)
+
+    def centre(t: float) -> float:
+        if t <= t_maxes[0]:
+            return b.z_m
+        z = float(np.interp(t, t_maxes, z_at_max))
+        if t > t_maxes[-1]:   # keeps rising at the last rate until the end of cycle 3
+            rate = (z_at_max[-1] - z_at_max[-2]) / (t_maxes[-1] - t_maxes[-2])
+            z = z_at_max[-1] + rate * (t - t_maxes[-1])
+        return z
+
+    start, vent_s = 0.0, None
+    for n, ratio in enumerate(WIGWAM_PERIOD_RATIOS):
+        T, rmax = T1 * ratio, r1 * ratio
+        cycles.append({"start_s": start, "period_s": T, "max_radius_m": rmax})
+        for f, a in zip(u, shape):
+            if n > 0 and f == 0.0:
+                continue
+            t = start + f * T
+            r, zc = rmax * a, centre(t)
+            if zc + r >= 0.0:   # the top of the bubble reaches the surface: it vents (Glasstone sec. 2.67)
+                vent_s = t
+                ts.append(t); rs.append(max(-zc, 0.0)); zs.append(zc)
+                break
+            if floor and zc - r <= -floor:
+                r = max(zc + floor, 0.0)   # squashed against the sea floor (drawing only; not modelled)
+            ts.append(t); rs.append(r); zs.append(zc)
+        if vent_s is not None:
+            break
+        start += T
+        if n < len(WIGWAM_PERIOD_RATIOS) - 1:
+            pulses.append(start)   # a bubble pulse (second pressure wave) at each minimum
+    scaled = depth * units.M_TO_FT / b.yield_kt ** (1.0 / 3.0)
+    vents = vent_s is not None
+    notes.append("Gas bubble: first maximum from Cole's (1948) TNT bubble law with the same TNT equivalent as the "
+                 "water shock (an assumption: Glasstone gives no bubble size); each cycle grows and collapses as in "
+                 "Rayleigh's bubble equation. Later cycles use the periods measured at WIGWAM (1 : 0.91 : 0.66, Snay "
+                 "1957) with radius in proportion to period, and rise by WIGWAM's calculated amounts per cycle scaled "
+                 "with the bubble size (our assumption). Glasstone secs. 2.88 / 6.51: two or three cycles.")
+    if pulses:
+        notes.append("Each time the bubble collapses to its smallest it sends out a second, weaker pressure wave "
+                     "(a 'bubble pulse', Glasstone sec. 2.87: lower peak but longer). Its strength for nuclear bursts "
+                     "has no published figure, so only its timing is shown.")
     if vents:
         notes.append(f"The bubble reaches the surface after about {vent_s * 1e3:.0f} ms and vents (Glasstone sec. 2.67; "
-                     f"scaled depth {scaled:.0f} ft/kt^1/3, venting expected below about 35, sec. 6.53). For BAKER, "
-                     "Glasstone sec. 2.68 says 'a few milliseconds' after the spray dome began (~4 ms).")
-    return {"center_z_m": b.z_m, "max_radius_m": r_max, "t_s": t, "radius_m": r, "vents": bool(vents),
+                     f"scaled depth {scaled:.0f} ft/kt^1/3, venting during the first expansion expected below about 35, "
+                     "sec. 6.53). For BAKER, Glasstone sec. 2.68 says 'a few milliseconds' after the spray dome began (~4 ms).")
+    return {"center_z_m": b.z_m, "max_radius_m": r1, "t_s": ts, "radius_m": rs, "centre_z_m": zs, "vents": bool(vents),
             "vent_s": vent_s, "floor_z_m": -floor if floor else None, "scaled_depth_ft": scaled,
-            "end_s": float(t[-1])}
+            "cycles": cycles, "pulses_s": pulses, "end_s": float(ts[-1])}
 
 
 def _waves(b: Burst, env: Environment, notes: list[str]) -> dict | None:
@@ -382,6 +442,8 @@ def timeline(b: Burst, env: Environment, receivers: list[Receiver], *, wind_mph:
             events.append({"t_s": f["arrival_s"], "label": f"fallout reaches {r['id']}", "kind": "fallout", "receiver": r["id"]})
     if bub and bub["vents"]:
         events.append({"t_s": bub["vent_s"], "label": "gas bubble reaches the surface", "kind": "blast"})
+    for k, tp in enumerate((bub or {}).get("pulses_s", [])):
+        events.append({"t_s": tp, "label": f"bubble collapses: pressure pulse {k + 2}", "kind": "blast"})
     events.sort(key=lambda e: e["t_s"])
     return {"t_end_s": t_end, "events": events, "fireball": fb, "air_blast": blast, "water_shock": ws, "bubble": bub,
             "waves": wv, "fallout": fo, "receivers": recs, "notes": notes}

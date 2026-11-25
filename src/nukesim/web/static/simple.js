@@ -27,27 +27,44 @@ export const SEAS = [
   { key: "big", label: "Dolphins and whales", icon: "🐬", items: [["dolphin", 0.8, -10], ["shark", 1.4, -15], ["humpback", 2.2, -20], ["orca", 4, -10]] },
   { key: "boats", label: "Boats and ships", icon: "🚢", items: [["boat", 0.9, 2], ["fishingboat", 1.8, 2], ["destroyer", 3.5, 2]] },
   { key: "fill", label: "Fill the sea", icon: "🌐", items: [["cod", 0.7, -30], ["diver", 1.0, -10], ["dolphin", 1.3, -10], ["fishingboat", 1.8, 2],
-    ["shark", 2.4, -15], ["humpback", 3.2, -20], ["destroyer", 4.5, 2]] },
+    ["shark", 2.4, -15], ["gull", 2.8, 30], ["humpback", 3.2, -20], ["destroyer", 4.5, 2]] },
 ];
 
 // plain-language verdicts
-const VERDICT = { none: "Unharmed", possible: "Probably fine", likely: "Injured", severe: "Badly injured", lethal: "Would not survive" };
+export const VERDICT = { none: "Unharmed", possible: "Probably fine", likely: "Injured", severe: "Badly injured", lethal: "Would not survive" };
 const SHIP_VERDICT = { none: "Undamaged", possible: "Lightly damaged", likely: "Disabled", severe: "Wrecked or sunk", lethal: "Wrecked or sunk" };
-function reason(e, kind) {
+export function reason(e, kind) {
   const n = e.name, l = e.level;
   if (n.startsWith("ship damage")) return { possible: "the shock damaged its radar and electrics", likely: "the shock wrecked its engines", severe: "the blast tore it apart" }[l] || "";
   if (n.includes("swim bladder")) return "the pressure wave burst its swim bladder (the air sac fish float with)";
-  if (n.includes("lung")) return "the pressure wave hurt its lungs";
-  if (n.includes("gut")) return "the pressure wave hurt its gut";
+  const mild = l === "possible";   // "possible" = at the threshold where injuries begin
+  if (n.includes("lung")) return mild ? "the pressure wave may have slightly hurt its lungs" : "the pressure wave hurt its lungs";
+  if (n.includes("gut")) return mild ? "the pressure wave may have slightly hurt its gut" : "the pressure wave hurt its gut";
   if (n.startsWith("hearing")) return l === "likely" ? "the bang permanently damaged its hearing" : "the bang left it temporarily deaf";
-  if (n.includes("peak pressure")) return kind === "diver" ? "the pressure wave crushed into the lungs and gut" : "the pressure wave crushed its insides";
-  if (n.includes("impulse")) return "the pressure wave hit the lungs and gut";
+  if (n.includes("peak pressure")) return mild ? "the pressure wave may have caused small injuries inside its body"
+    : kind === "diver" ? "the pressure wave crushed into the lungs and gut" : "the pressure wave crushed its insides";
+  if (n.includes("impulse")) return mild ? "the pressure wave may have slightly hurt the lungs and gut" : "the pressure wave hit the lungs and gut";
+  if (n.includes("bird")) return { possible: "the blast may have bruised it", likely: "the blast injured it", lethal: "the blast killed it" }[l] || "";
   if (n.includes("standing in the open")) return { possible: "the blast burst eardrums", likely: "the blast hurt the lungs", severe: "the blast caused deadly lung damage", lethal: "the blast was deadly" }[l] || "";
   if (n.includes("burns")) return l === "severe" ? "the heat flash caused bad burns" : "the heat flash burned the skin";
   if (n.includes("flash blindness")) return l === "severe" ? "the flash burned a blind spot into the eyes" : "the flash blinded them for a while";
   if (n.includes("radiation")) return { possible: "a dose of radiation that could make them sick", likely: "radiation sickness", severe: "severe radiation sickness", lethal: "a deadly dose of radiation" }[l] || "";
   return "";
 }
+
+// short facts shown while the countdown runs (each from the sources used in the simulator, or well-documented history)
+export const FACTS = [
+  "Sound travels about four times faster in water than in air: about 1,500 m/s against 340 m/s.",
+  "The 1946 BAKER test threw up a column of about a million tons of water, 2,000 ft wide and 6,000 ft high (Glasstone & Dolan).",
+  "About a third of an air burst's energy comes out as heat and light (Glasstone & Dolan sec. 7.04).",
+  "Fish with a swim bladder, the air-filled sac they float with, are hurt by blasts far more easily than fish without one, like mackerel and sharks.",
+  "The largest bomb ever tested, Tsar Bomba (1961), released about 50 megatons: over 3,000 times the Hiroshima bomb.",
+  "Castle Bravo (1954) came out at 15 megatons, about two and a half times what its designers expected.",
+  "Underwater, the gas bubble of a nuclear blast swells, collapses and bounces back two or three times while it rises.",
+  "At night the flash can blind people from much farther away, because our pupils are wide open in the dark.",
+  "The cloud from a 1 megaton burst climbs about 20 km: more than twice as high as Mount Everest.",
+  "Waves from a burst at sea travel as a group; the biggest wave arrives after the first ones.",
+];
 
 const fmtKm = (m) => (m < 1000 ? `${Math.round(m)} m` : `${+(m / 1000).toPrecision(2)} km`);
 const fmtT = (t) => (t < 1e-3 ? `${+(t * 1e6).toPrecision(2)} µs` : t < 1 ? `${+(t * 1e3).toPrecision(2)} ms` : t < 60 ? `${+t.toPrecision(2)} s` : `${+(t / 60).toPrecision(2)} min`);
@@ -59,7 +76,12 @@ export function initSimple(ctx) {
   el.id = "simple";
   el.innerHTML = `
     <div class="spStart">
-      <h1>What happens when a nuclear bomb goes off over the sea?</h1>
+      <div class="spHero">
+        <div class="spKicker">An interactive simulation</div>
+        <h1>What if a nuke exploded underwater</h1>
+        <p>Or right on the waves, or high above them. Pick a bomb and a spot, then watch what the science says happens to everything in and on the water.</p>
+      </div>
+      <div class="spPanel">
       <div class="spStep"><div class="spNum">1</div><div class="spBody"><h3>Pick a bomb</h3><div class="spCards" data-group="bomb">
         ${BOMBS.map((b) => `<button class="spCard" data-key="${b.key}"><span class="spBoom s${b.size}"></span><b>${b.label}</b><small>${b.sub}</small></button>`).join("")}
       </div></div></div>
@@ -69,22 +91,27 @@ export function initSimple(ctx) {
       <div class="spStep"><div class="spNum">3</div><div class="spBody"><h3>What's in the sea?</h3><div class="spCards" data-group="sea">
         ${SEAS.map((s) => `<button class="spCard" data-key="${s.key}"><span class="spIcon">${s.icon}</span><b>${s.label}</b></button>`).join("")}
       </div></div></div>
-      <button class="spGo">💥 Detonate</button>
+      <div class="spActions"><button class="spGo">💥 Detonate</button><button class="spRandom" title="Pick everything at random">🎲 Surprise me</button></div>
+      </div>
+      <div class="spMore"><button class="spDiveBtn">🌊 Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button></div>
       <p class="spNote">Every number comes from published science (Glasstone &amp; Dolan, the U.S. Navy and others).
-        The pictures are drawn to scale; the bursts are hypothetical.</p>
+        Distances and sizes are to scale; the bursts are hypothetical.</p>
     </div>
-    <div class="spCount" hidden></div>
+    <div class="spCount" hidden><div class="spCountNum"></div><div class="spFact"></div></div>
     <div class="spCaption" hidden></div>
     <div class="spBar" hidden>
       <button class="spReplay" title="Watch it again">↺ Replay</button>
+      <button class="spPause" title="Pause / continue (Space)">⏸ Pause</button>
+      <span class="spSpeed" title="How fast the film plays"><button data-sp="0.6">Slower</button><button data-sp="1" class="on">Normal</button><button data-sp="1.6">Faster</button></span>
       <button class="spSkip" title="Jump to the results">Skip to results ⏭</button>
       <button class="spNew" title="Choose a different bomb or sea">✎ Change setup</button>
     </div>
+    <div class="spLook" hidden></div>
     <div class="spResults" hidden><div class="spResHead"><h2>What happened</h2><button class="spResClose" title="Hide">✕</button></div><div class="spResBody"></div>
-      <div class="spResFoot"><button class="spReplay2">↺ Replay</button><button class="spNew2">✎ Try something else</button><button class="spExpert">🔬 See all the numbers</button></div></div>`;
+      <div class="spResFoot"><button class="spShare">📤 Share</button><button class="spReplay2">↺ Replay</button><button class="spNew2">✎ Try something else</button><button class="spExpert">🔬 See all the numbers</button></div></div>`;
   main.appendChild(el);
   const q = (s) => el.querySelector(s);
-  const choice = { bomb: "hiroshima", where: "sky", sea: "fill" };
+  const choice = { bomb: "hiroshima", where: "under", sea: "fill" };   // underwater first: it is the site's question
   el.querySelectorAll(".spCards").forEach((box) => {
     const mark = () => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group]));
     box.addEventListener("click", (e) => {
@@ -105,8 +132,13 @@ export function initSimple(ctx) {
     q(".spCaption").hidden = what !== "film";
     q(".spBar").hidden = !(what === "film" || what === "results");
     q(".spSkip").hidden = what !== "film";
+    q(".spPause").hidden = q(".spSpeed").hidden = what !== "film";
+    q(".spLook").hidden = !(what === "film" || what === "results");
+    if (what === "film" || what === "results") renderLook();
     q(".spResults").hidden = what !== "results";
     document.body.classList.toggle("spOverlay", what === "start" || what === "count");
+    document.body.classList.toggle("spFilm", what === "film");
+    ctx.onShow?.(what);
   }
 
   function setupScene() {
@@ -123,16 +155,22 @@ export function initSimple(ctx) {
     setupScene();
     ctx.timeline.pause(); ctx.timeline.setTime(0);
     show("count");
+    q(".spFact").textContent = "💡 " + FACTS[Math.floor(Math.random() * FACTS.length)];
     let n = 3;
     const step = () => {
-      q(".spCount").textContent = n || "";
+      q(".spCountNum").textContent = n || "";
       if (n > 0) { ctx.sound.tick(n === 1); n--; setTimeout(step, 800); return; }
       // wait for the simulator's timeline of this scenario (it is computed in the background)
       const t0 = performance.now();
       const wait = () => {
-        const d = ctx.timeline.getData();
-        if ((d && d !== before) || performance.now() - t0 > 8000) startFilm(d);
-        else setTimeout(wait, 100);
+        const d = ctx.timeline.getData(), err = ctx.timeline.getError(), waited = performance.now() - t0;
+        if ((d && d !== before) || (waited > 400 && ctx.timeline.upToDate())) return startFilm(d);   // (same scenario as last time: nothing new to wait for)
+        if ((err && waited > 1500) || waited > 15000) {   // it failed (or never came): say so instead of freezing
+          show("start");
+          ctx.toast(`The explosion could not be worked out: ${err || "the server did not answer in time"}`, { kind: "err", ms: 12000 });
+          return;
+        }
+        setTimeout(wait, 100);
       };
       wait();
     };
@@ -152,7 +190,8 @@ export function initSimple(ctx) {
     const recById = Object.fromEntries(ctx.state.receivers.map((r) => [r.id, r]));
     const tl = (data.receivers || []).filter((x) => recById[x.id] && !x.error);
     const beats = [];
-    const beat = (t, cam, text, dur = 3.2) => beats.push({ t, cam, text, dur });
+    const PACE = 1.4;   // seconds on screen per beat are multiplied by this (and by the speed setting)
+    const beat = (t, cam, text, dur = 3.2) => beats.push({ t, cam, text, dur: dur * PACE });
 
     // 1. the burst itself
     if (bz >= 0) {
@@ -194,8 +233,8 @@ export function initSimple(ctx) {
     // 3. the cloud (or column)
     if (bz >= 0) {
       const top = cloudTopM(y);
-      beat(Math.max(40, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "side" }, "The fireball rises and cools; the mushroom cloud climbs, sucking up air, spray and debris.", 4.5);
-      beat(270, { name: "far" }, `The cloud stops rising about ${fmtKm(top)} up: ${(top / 8849).toFixed(1)} times as high as Mount Everest.`, 5);
+      beat(Math.max(40, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "side" }, "The fireball rises and cools; the mushroom cloud climbs, sucking up air, spray and debris.", 6);
+      beat(270, { name: "far" }, `The cloud stops rising about ${fmtKm(top)} up: ${(top / 8849).toFixed(1)} times as high as Mount Everest.`, 6);
     } else {
       beat(Math.max(60, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "far" }, "The column falls back and a ring of mist, the base surge, rolls out across the sea.", 4.5);
     }
@@ -211,31 +250,52 @@ export function initSimple(ctx) {
     beats.sort((a, b) => a.t - b.t);
     for (let k = 1; k < beats.length; k++) if (beats[k].t <= beats[k - 1].t) beats[k].t = beats[k - 1].t * 1.05;   // strictly later
     const end = Math.max(bz >= 0 ? 600 : 300, beats[beats.length - 1].t * 1.3);
-    film = { simT: beats[0].t, lastSet: null, beats, k: -1, kStart: 0, end, camLocked: false };
+    film = { simT: beats[0].t, lastSet: null, beats, k: -1, elapsed: 0, end, camLocked: false, paused: false };
+    q(".spPause").textContent = "⏸ Pause";
     show("film");
-    ctx.drift(true);
-    goBeat(0);
+    // the lead-in: the bomb falling (above water) or hanging on its cable (underwater), then the flash
+    const depth = Math.round(-bz);
+    film.pre = { elapsed: 0, dur: bz >= 0 ? 4.2 : 3.6 };
+    ctx.drift(false);
+    ctx.preRoll({ f: 0, follow: true });
+    ctx.timeline.setTime(0); film.lastSet = ctx.timeline.getTime();
+    setCaption(bz > 50 ? "A bomb is falling toward the sea…" : bz >= 0 ? "A bomb is falling toward the sea surface…"
+      : `${depth} m down, a bomb hangs on a cable under a small ship, as in the 1946 BAKER test…`, true);
+    if (bz >= 0) ctx.sound.whistle(film.pre.dur);
     renderResults();
   }
 
+  function setCaption(text, now = false) {
+    const box = q(".spCaption");
+    clearTimeout(film?.capTimer);
+    box.classList.remove("in"); box.textContent = "";
+    const put = () => { void box.offsetWidth; box.textContent = text; box.classList.add("in"); };
+    if (now) put(); else film.capTimer = setTimeout(put, 700);
+  }
+
   function goBeat(k) {
-    film.k = k; film.kStart = performance.now();
+    film.k = k; film.elapsed = 0;
     const b = film.beats[k];
     if (!film.camLocked) { ctx.setShot(b.cam, k === 0); ctx.drift(b.cam.name !== "focus"); }   // slow turn on wide shots only
     // the caption comes in as the camera arrives at its new shot (the move takes about a second)
-    const box = q(".spCaption");
-    clearTimeout(film.capTimer);
-    box.classList.remove("in"); box.textContent = "";
-    film.capTimer = setTimeout(() => { void box.offsetWidth; box.textContent = b.text; box.classList.add("in"); }, k === 0 || film.camLocked ? 0 : 700);
+    setCaption(b.text, k === 0 || film.camLocked);
   }
 
-  function update() {
+  function update(dt = 0.016) {
     if (showing !== "film" || !film) return;
+    if (film.pre) {   // the lead-in before the detonation
+      if (!film.paused) film.pre.elapsed += dt * speed;
+      const f = Math.min(film.pre.elapsed / film.pre.dur, 1);
+      ctx.preRoll({ f, follow: !film.camLocked });
+      if (f >= 1) { film.pre = null; ctx.preRoll(null); goBeat(0); }
+      return;
+    }
+    if (!film.paused) film.elapsed += dt * speed;
     // the user took over the timeline (dragged it or pressed play): stop directing
     if (film.lastSet != null && Math.abs(ctx.timeline.getTime() - film.lastSet) > 1e-6 * Math.max(1, film.lastSet)) { finish(); return; }
     const b = film.beats[film.k], next = film.beats[film.k + 1];
     const tNext = next ? next.t : film.end;
-    const f = Math.min((performance.now() - film.kStart) / 1000 / b.dur, 1);
+    const f = Math.min(film.elapsed / b.dur, 1);
     film.simT = b.t * Math.pow(tNext / b.t, f);             // glide in log time: slow motion early, fast later
     ctx.timeline.setTime(film.simT); film.lastSet = ctx.timeline.getTime();
     if (f >= 1) {
@@ -245,7 +305,7 @@ export function initSimple(ctx) {
     if (Math.random() < 0.1) renderResults();
   }
 
-  function finish() { ctx.drift(false); show("results"); renderResults(); }
+  function finish() { ctx.preRoll(null); if (film) film.pre = null; ctx.drift(false); show("results"); renderResults(); }
 
   // ---------------------------------------------------------------- results in plain words
   function renderResults() {
@@ -274,32 +334,170 @@ export function initSimple(ctx) {
       const col = lvl === null ? "#9aa8b6" : LEVEL_COLORS[lv];
       const details = a.effects.map((e) => `<li><span class="level lv-${e.level}">${e.level}</span> ${esc(e.name)}: ${esc(e.value)}</li>`).join("");
       return `<div class="spRes" style="--c:${col}"><div class="spResTop"><span class="spEmoji">${esc(r.emoji)}</span>
-        <div><b>${esc(r.label.replace(/ \d+$/, ""))}</b> <small>${dist} away${r.z_m < 0 ? `, ${Math.round(-r.z_m)} m deep` : ""}</small>
-        <div class="spVerdict">${verdict}</div></div></div>
+        <div><b>${esc(r.label.replace(/ \d+$/, ""))}</b> <small>${dist} away${r.z_m < 0 ? `, ${Math.round(-r.z_m)} m deep` : r.kind === "bird" ? `, ${Math.round(r.z_m)} m up` : ""}</small>
+        <div class="spVerdict">${verdict}</div></div><button class="spView" data-id="${esc(r.id)}" title="Point the camera at it">👁 View</button></div>
         ${lvl === null ? "" : `<div class="spWhy">${esc(why.charAt(0).toUpperCase() + why.slice(1))}.</div>
         <details><summary>Why? The numbers</summary><ul>${details}</ul></details>`}</div>`;
     }).join("");
-    body.innerHTML = cards || `<p class="help">Working it out…</p>`;
+    // how far the danger reached, in plain words
+    const zs = ctx.getZones?.();
+    let zoneHtml = "";
+    if (zs && showing === "results") {
+      const by = Object.fromEntries(zs.map((z) => [z.key, z.farthest_m]));
+      const line = (icon, what, r) => (r ? `<div>${icon} ${what} out to <b>${fmtKm(r)}</b></div>` : "");
+      zoneHtml = `<div class="spZones"><h3>How far the danger reached</h3>` +
+        line("🐟", "Fish killed", by.fish_bladder?.lethal) + line("🐬", "Dolphins badly hurt", by.dolphin?.severe) +
+        line("🐋", "Whales badly hurt", by.whale?.severe) + line("🤿", "Divers killed", by.diver?.lethal) +
+        line("🧍", "People on deck killed", by.person?.lethal) + line("🤕", "People on deck injured", by.person?.likely) +
+        line("🚢", "Ships wrecked", by.destroyer?.severe) +
+        `<label class="check"><input type="checkbox" class="spZoneToggle" ${ctx.zonesShown() ? "checked" : ""}> Draw these as circles on the sea</label></div>`;
+    }
+    body.innerHTML = zoneHtml + compareHtml() + (cards || `<p class="help">Working it out…</p>`);
+    body.querySelector(".spZoneToggle")?.addEventListener("change", (e) => ctx.setZonesShown(e.target.checked));
+    body.querySelectorAll(".spView").forEach((b) => b.addEventListener("click", () => lookAt(b.dataset.id)));
+  }
+
+  // ---------------------------------------------------------------- in real-world terms
+  function compareLines() {
+    const sc = ctx.scenario(), d = ctx.timeline.getData(), y = sc.burst.yield_kt, zs = ctx.getZones?.();
+    const by = Object.fromEntries((zs || []).map((z) => [z.key, z.farthest_m]));
+    const L = [];
+    if (d?.fireball && sc.burst.z_m >= 0) {
+      const D = 2 * d.fireball.max_radius_m;
+      L.push(`🔥 The fireball was ${fmtKm(D)} across: wider than ${Math.max(1, Math.round(D / 105))} football pitches laid end to end.`);
+    }
+    if (sc.burst.z_m >= 0) {
+      const top = cloudTopM(y);
+      // compare with whatever is just smaller than it, so it always reads "N times as high as ..."
+      const cmp = top >= 11000 ? `${(top / 8849).toFixed(1)} times as high as Mount Everest, and higher than airliners fly`
+        : top >= 8849 ? `higher than Mount Everest (8.8 km)`
+        : `${(top / 828).toFixed(top < 2000 ? 1 : 0)} times the height of the world's tallest building (828 m)`;
+      L.push(`☁️ The cloud rose about ${fmtKm(top)}: ${cmp}.`);
+    } else {
+      const k = Math.cbrt(y / 20), vent = (-sc.burst.z_m * 3.28084 / Math.cbrt(y)) < 35;
+      L.push(`🌊 A column of water about ${fmtKm((vent ? 1830 : 270) * k)} high shot out of the sea (scaled from the 1946 BAKER test).`);
+    }
+    const fish = by.fish_bladder?.lethal;
+    if (fish) {
+      const a = Math.PI * fish * fish / 1e6;
+      L.push(`🐟 Fish were killed across ${a < 1 ? a.toFixed(2) : Math.round(a)} km² of sea${a > 6 ? `: about ${(a / 59).toFixed(a > 59 ? 0 : 1)} times the area of Manhattan` : ""}.`);
+    }
+    const hurt = by.person?.likely;
+    if (hurt) L.push(`🧍 People out in the open were injured up to ${fmtKm(hurt)} away: ${hurt >= 2737
+      ? `${(hurt / 2737).toFixed(1)} times the length of the Golden Gate Bridge` : `about ${Math.max(1, Math.round(hurt / 105))} football pitches end to end`}.`);
+    return L;
+  }
+  function compareHtml() {
+    if (showing !== "results") return "";
+    const L = compareLines();
+    return L.length ? `<div class="spCompare"><h3>In real-world terms</h3>${L.map((l) => `<div>${esc(l)}</div>`).join("")}</div>` : "";
+  }
+
+  // ---------------------------------------------------------------- share: a picture + a link that sets up the same burst
+  function shareLink() { return `${location.origin}${location.pathname}#play=${choice.bomb}.${choice.where}.${choice.sea}`; }
+  async function share() {
+    const b = BOMBS.find((x) => x.key === choice.bomb), w = WHERE.find((x) => x.key === choice.where);
+    const shot = ctx.snapshot();
+    const c = document.createElement("canvas"); c.width = 1200; c.height = 630;
+    const g = c.getContext("2d");
+    const img = new Image();
+    await new Promise((res) => { img.onload = res; img.onerror = res; img.src = shot; });
+    if (img.width) {   // cover the card with the picture
+      const s = Math.max(1200 / img.width, 630 / img.height);
+      g.drawImage(img, (1200 - img.width * s) / 2, (630 - img.height * s) / 2, img.width * s, img.height * s);
+    } else { g.fillStyle = "#9cc7e0"; g.fillRect(0, 0, 1200, 630); }
+    const grad = g.createLinearGradient(0, 260, 0, 630);
+    grad.addColorStop(0, "rgba(255,255,255,0)"); grad.addColorStop(1, "rgba(255,255,255,0.95)");
+    g.fillStyle = grad; g.fillRect(0, 0, 1200, 630);
+    g.fillStyle = "#232846"; g.font = "800 46px -apple-system, Segoe UI, sans-serif";
+    g.fillText(`${b.label} bomb, ${w.label.toLowerCase()}`, 48, 430);
+    g.font = "600 26px -apple-system, Segoe UI, sans-serif";
+    compareLines().slice(1, 4).forEach((l, i) => g.fillText(l.length > 80 ? l.slice(0, 78) + "…" : l, 48, 480 + i * 38));
+    g.fillStyle = "#ff5a3a"; g.font = "700 22px -apple-system, Segoe UI, sans-serif";
+    g.fillText("whatifanukeexplodedunderwater.com", 48, 602);
+    const blob = await new Promise((res) => c.toBlob(res, "image/png"));
+    const file = new File([blob], "what-if-a-nuke-exploded-underwater.png", { type: "image/png" });
+    const text = `${b.label} bomb, ${w.label.toLowerCase()}: what happens to everything in the sea.`;
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "What if a nuke exploded underwater", text, url: shareLink() }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    ctx.download("what-if-a-nuke-exploded-underwater.png", blob);
+    try { await navigator.clipboard.writeText(shareLink()); ctx.toast("Picture saved, and a link to this setup copied: paste it anywhere.", { kind: "ok", ms: 6000 }); }
+    catch (_) { ctx.toast(`Picture saved. Link to this setup: ${shareLink()}`, { kind: "ok", ms: 9000 }); }
+  }
+
+  // ---------------------------------------------------------------- looking at one thing
+  let speed = 1;
+  function lookAt(id) {
+    if (film) film.camLocked = true;
+    ctx.drift(false);
+    if (id === "_burst") ctx.setShot({ name: "side" });
+    else if (id === "_school") ctx.setShot({ name: "school", i: 2 });
+    else ctx.setShot({ name: "focus", id });
+    renderLook(id);
+  }
+  function autoCamera() {
+    if (!film) return;
+    film.camLocked = false;
+    const b = film.beats[film.k];
+    if (b) { ctx.setShot(b.cam); ctx.drift(b.cam.name !== "focus"); }
+    renderLook();
+  }
+  function renderLook(active = null) {
+    const box = q(".spLook");
+    const chips = ctx.state.receivers.map((r) => `<button data-id="${esc(r.id)}" class="${active === r.id ? "on" : ""}" title="Look at the ${esc(r.label.replace(/ \d+$/, "").toLowerCase())}">${esc(r.emoji)} ${esc(r.label.replace(/ \d+$/, ""))}</button>`).join("");
+    box.innerHTML = `<span class="lbl">Look at</span>` +
+      (showing === "film" ? `<button data-id="_auto" class="${film && !film.camLocked ? "on" : ""}" title="Let the film choose the shots">🎬 Auto</button>` : "") +
+      `<button data-id="_burst" class="${active === "_burst" ? "on" : ""}">💥 The explosion</button>` +
+      `<button data-id="_school" class="${active === "_school" ? "on" : ""}" title="A shoal of fish near the edge of the killing zone">🐠 School of fish</button>` + chips;
+    box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => (b.dataset.id === "_auto" ? autoCamera() : lookAt(b.dataset.id))));
   }
 
   // ---------------------------------------------------------------- buttons
+  q(".spPause").addEventListener("click", () => {
+    if (!film) return;
+    film.paused = !film.paused;
+    q(".spPause").textContent = film.paused ? "▶ Continue" : "⏸ Pause";
+  });
+  el.querySelectorAll(".spSpeed button").forEach((b) => b.addEventListener("click", () => {
+    speed = +b.dataset.sp;
+    el.querySelectorAll(".spSpeed button").forEach((x) => x.classList.toggle("on", x === b));
+  }));
   q(".spGo").addEventListener("click", detonate);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)].key;
+  q(".spRandom").addEventListener("click", () => {
+    choice.bomb = pick(BOMBS); choice.where = pick(WHERE); choice.sea = pick(SEAS);
+    el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group])));
+    detonate();
+  });
+  q(".spDiveBtn").addEventListener("click", () => ctx.openDive?.(choice));
+  q(".spAboutBtn").addEventListener("click", () => ctx.openAbout?.());
   const replay = () => { ctx.sound.unlock(); ctx.timeline.pause(); ctx.timeline.setTime(0); film ? startFilm(ctx.timeline.getData()) : detonate(); };
   q(".spReplay").addEventListener("click", replay);
   q(".spReplay2").addEventListener("click", replay);
-  q(".spSkip").addEventListener("click", () => { ctx.timeline.setTime(film?.end ?? 600); finish(); });
-  const again = () => { film = null; ctx.drift(false); ctx.timeline.pause(); show("start"); };
+  q(".spSkip").addEventListener("click", () => { ctx.preRoll(null); if (film) film.pre = null; ctx.timeline.setTime(film?.end ?? 600); finish(); });
+  const again = () => { film = null; ctx.preRoll(null); ctx.drift(false); ctx.timeline.pause(); show("start"); };
   q(".spNew").addEventListener("click", again);
   q(".spNew2").addEventListener("click", again);
   q(".spResClose").addEventListener("click", () => { q(".spResults").hidden = true; });
   q(".spExpert").addEventListener("click", () => ctx.toExpert());
+  q(".spShare").addEventListener("click", () => share());
 
   return {
     update,
     show,
-    lockCamera() { if (film) { film.camLocked = true; ctx.drift(false); } },
+    lockCamera() { if (film) { film.camLocked = true; ctx.drift(false); renderLook(); } },
+    togglePause() { if (showing === "film") q(".spPause").click(); },
     refresh: renderResults,
     get state() { return showing; },
     get choice() { return choice; },
+    /** Open with a shared setup ("#play=bomb.where.sea"): choices filled in, ready to detonate. */
+    preset(bomb, where, sea) {
+      if (BOMBS.some((x) => x.key === bomb)) choice.bomb = bomb;
+      if (WHERE.some((x) => x.key === where)) choice.where = where;
+      if (SEAS.some((x) => x.key === sea)) choice.sea = sea;
+      el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group])));
+      q(".spGo").classList.add("pulse");
+    },
   };
 }

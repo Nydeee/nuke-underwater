@@ -104,6 +104,12 @@ def lance_risk(impulse_pa_s: float, organ: str, outcome: str) -> float:
 
 
 # --- People in air (glasstone1977 Table 12.38, sec. 12.32) --------------------
+BIRD_PSI = [   # damon1974 pp. 30-31: birds in the open at sea level, incident overpressure
+    (5.0, "no injuries", "none"),
+    (10.0, "slight to extensive injuries", "likely"),
+    (20.0, "about 50% killed", "lethal"),
+]
+
 DECK_PSI = [  # (effective peak overpressure psi, effect, level)
     (5.0, "eardrum rupture threshold", "possible"),
     (12.0, "lung damage threshold", "likely"),

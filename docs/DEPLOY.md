@@ -30,7 +30,7 @@ other hosts, so you aren't locked in.
 |---|---|---|
 | Render Free | $0 | Sleeps after 15 min idle. The first visit after that takes about 1 minute. Good for trying it out and sharing with friends. |
 | Render Starter | $7 / month | Always awake, 512 MB of memory. Enough for a few dozen people using it at once. |
-| Your own domain (optional) | about $10–15 / year | An address like `nukesim.org` instead of `nukesim.onrender.com`. You buy it from a domain seller such as Namecheap or Cloudflare. |
+| Your own domain (optional) | about $10–15 / year | An address like `whatifanukeexplodedunderwater.com` instead of `nukesim.onrender.com`. You buy it from a domain seller such as Namecheap or Cloudflare. |
 
 The physics runs on the server, so more visitors means more work for it. The built-in limits
 (below) stop any one person from using it all up.
@@ -88,6 +88,8 @@ To change plan (Free ↔ Starter) or region, either edit `render.yaml` and push,
 service's **Settings** page on Render.
 
 ### 4. (Optional) Use your own domain
+
+The planned address is **whatifanukeexplodedunderwater.com** (the page's link-preview tags in `index.html` already point to it). Add both `whatifanukeexplodedunderwater.com` and `www.whatifanukeexplodedunderwater.com`.
 
 On Render, open the service → **Settings** → **Custom Domains** → **Add**. Render tells you which DNS
 record to add at the company where you bought the domain. HTTPS is set up for it automatically.

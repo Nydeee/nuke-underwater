@@ -73,6 +73,17 @@ export function createSound() {
     n.start(t0, Math.random() * 3); n.stop(t0 + 4.5);
   }
 
+  /** A falling bomb's whistle, sliding down in pitch over `dur` seconds. */
+  function whistle(dur = 4) {
+    if (!ensure() || muted) return;
+    const t0 = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    o.type = "sine"; o.frequency.setValueAtTime(1500, t0); o.frequency.exponentialRampToValueAtTime(420, t0 + dur);
+    f.type = "lowpass"; f.frequency.value = 2500;
+    o.connect(f); f.connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.6); g.gain.setValueAtTime(0.12, t0 + dur - 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+
   /** A short tick for the countdown. */
   function tick(high = false) {
     if (!ensure() || muted) return;
@@ -88,5 +99,5 @@ export function createSound() {
     try { localStorage.setItem("nukesim.muted", m ? "1" : "0"); } catch (_) { /* ignore */ }
     if (master) master.gain.value = m ? 0 : 0.9;
   }
-  return { unlock: ensure, boom, wash, tick, setMuted, get muted() { return muted; } };
+  return { unlock: ensure, boom, wash, tick, whistle, setMuted, get muted() { return muted; } };
 }

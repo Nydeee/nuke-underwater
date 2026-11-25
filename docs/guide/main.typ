@@ -18,5 +18,6 @@
 #include "ch10_uncertainty.typ"
 #include "ch11_timeline.typ"
 #include "ch12_ships_weather_bodies.typ"
+#include "ch13_waves_spray_ragdolls.typ"
 #include "glossary.typ"
 #include "references.typ"

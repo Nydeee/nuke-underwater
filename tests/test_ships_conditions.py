@@ -111,3 +111,45 @@ def test_api_accepts_ships_and_weather():
     names = [e["name"] for e in j["receivers"][0]["effects"]]
     assert "ship damage (air blast)" in names
     assert j["receivers"][0]["effects"][0]["level"] in ("none", "possible", "likely", "severe", "lethal")
+
+
+# ---------------------------------------------------------------- danger distances
+def test_danger_distances_match_the_point_assessments():
+    from nukesim.biology.zones import danger_distances
+    b, env = Burst(23, -27), Environment(water_depth_m=55)
+    z = {k["key"]: k for k in danger_distances(b, env)}
+    lethal = z["fish_bladder"]["farthest_m"]["lethal"]
+    assert lethal and lethal > 100
+    inside = assess(b, Receiver(lethal * 0.95, 0, -10, kind="fish", mass_kg=5, swim_bladder=True), env)
+    outside = assess(b, Receiver(lethal * 1.5, 0, -10, kind="fish", mass_kg=5, swim_bladder=True), env)
+    assert inside.worst == "lethal" and outside.worst != "lethal"
+    # levels nest: anything lethal is also at least severe there
+    for k in z.values():
+        f = k["farthest_m"]
+        if f["lethal"]:
+            assert f["severe"] and f["severe"] >= f["lethal"]
+
+
+def test_zones_api():
+    j = client.post("/api/zones", json={"burst": {"yield_kt": 15, "z_m": 580}}).json()
+    keys = [k["key"] for k in j["kinds"]]
+    assert "person" in keys and "destroyer" in keys
+
+
+# ---------------------------------------------------------------- birds
+@pytest.mark.parametrize("psi,level", [(4.0, "none"), (6.0, "possible"), (12.0, "likely"), (25.0, "lethal")])
+def test_bird_levels_follow_damon(psi, level, monkeypatch):
+    from nukesim.biology import assess as A
+    class SB:  # a fake air blast with the overpressure we want
+        peak_overpressure_pa = psi * PSI
+    monkeypatch.setattr(A.air_blast, "surface_blast", lambda *a, **k: SB())
+    res = A.assess(Burst(20, 500), Receiver(2000, 0, 30, kind="bird", mass_kg=1.0))
+    assert next(e for e in res.effects if e.name.startswith("blast (bird")).level == level
+
+
+def test_bird_must_be_above_water_and_api_accepts_it():
+    with pytest.raises(ValueError):
+        assess(Burst(20, 500), Receiver(2000, 0, -5, kind="bird"))
+    j = client.post("/api/assess", json={"burst": {"yield_kt": 20, "z_m": 500},
+                                         "receivers": [{"id": "g", "kind": "bird", "x_m": 1000, "z_m": 30, "mass_kg": 1}]}).json()
+    assert j["receivers"][0]["effects"][0]["name"] == "blast (bird in the open)"

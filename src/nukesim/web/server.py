@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, model_validator
 from .. import units
 from ..biology.assess import LEVELS, assess
 from ..biology.long_term import assess_long_term
+from ..biology.zones import danger_distances
 from ..biology.uncertain import assess_uncertain
 from ..uncertainty import INGREDIENTS
 from ..effects import (air_blast, air_to_water, fallout, near_surface_shock, radiation_shielding,
@@ -68,7 +69,7 @@ class EnvIn(BaseModel):
 
 class ReceiverIn(BaseModel):
     id: str = Field(max_length=100)
-    kind: Literal["fish", "mammal", "turtle", "diver", "person", "ship"]
+    kind: Literal["fish", "mammal", "turtle", "diver", "person", "ship", "bird"]
     x_m: float = Field(ge=-MAX_COORD_M, le=MAX_COORD_M)
     y_m: float = Field(0.0, ge=-MAX_COORD_M, le=MAX_COORD_M)
     z_m: float = Field(ge=-20_000, le=100_000)
@@ -345,6 +346,15 @@ def fallout_series(f: FalloutIn):
         "internal_high_ugy_h": lt.internal_ugy_h[1] if lt.internal_ugy_h is not None else None,
         "findings": lt.findings, "notes": lt.notes,
     })
+
+
+@app.post("/api/zones")
+def zones(s: Scenario):
+    """How far each level of harm reaches for typical animals, people and ships (biology/zones.py)."""
+    b, env = _burst(s.burst), _env(s.env)
+    if regime(b, env).startswith("impossible"):
+        raise HTTPException(status_code=422, detail=regime(b, env))
+    return _clean({"kinds": danger_distances(b, env), "levels": LEVELS})
 
 
 @app.post("/api/timeline")

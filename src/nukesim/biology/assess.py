@@ -298,6 +298,30 @@ def _radiation(burst, rec, env, a: Assessment, human: bool, prefix: str = "", sh
         a.notes.append(note)
 
 
+def _bird(burst, rec, env, a: Assessment):
+    """A seabird in flight or sitting on the sea (damon1974)."""
+    if burst.z_m < 0:
+        a.notes.append("Birds above an underwater burst: the air blast is not modelled (the spray and the column of water "
+                       "would be the danger).")
+        return
+    r = math.hypot(rec.x_m, rec.y_m)
+    p_psi = air_blast.surface_blast(burst.yield_kt, burst.z_m, r).peak_overpressure_pa * units.PA_TO_PSI
+    lvl, what = ("possible", "below the 10 psi injury level") if p_psi >= 5.0 else ("none", "no injuries")
+    for thr, txt, l in c.BIRD_PSI:
+        if p_psi >= thr and l != "none":
+            lvl, what = l, txt
+    a.effects.append(Effect(
+        "blast (bird in the open)", lvl, f"{p_psi:.3g} psi peak overpressure: {what}",
+        "5 psi no injuries, 10 psi slight to extensive injuries, 20 psi ~50% killed (birds of 0.1-4.2 kg, long pulses)",
+        "damon1974", p_psi, "psi"))
+    a.notes.append("Bird blast criteria come from shock-tube tests on geese, quail, chickens and pigeons (0.1-4.2 kg); "
+                   "the overpressure is taken at sea level under the bird.")
+    if rec.mass_kg and not 0.1 <= rec.mass_kg <= 4.2:
+        a.notes.append(f"A {rec.mass_kg:g} kg bird is outside the 0.1-4.2 kg range of the tests.")
+    a.notes.append("Burns: birds near the 10 Mt Mike test were found burned, dark-feathered ones worse (Donaldson 1953), "
+                   "but no exposure threshold for birds is published, so burns are not assessed.")
+
+
 def _ship(burst, rec, env, a: Assessment):
     st = rec.ship_type or "destroyer"
     rng = math.hypot(rec.x_m, rec.y_m)
@@ -348,9 +372,9 @@ def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> 
     in_water = receiver.z_m < 0
     if kind in ("fish", "mammal", "turtle", "diver") and not in_water:
         raise ValueError(f"A {kind} must be in the water (z_m < 0).")
-    if kind in ("person", "ship") and in_water:
+    if kind in ("person", "ship", "bird") and in_water:
         raise ValueError("A 'person' is on deck (z_m >= 0); use kind='diver' for someone underwater.")
-    if kind not in ("person", "ship"):
+    if kind not in ("person", "ship", "bird"):
         a.notes.append("Injury criteria come from small charges with short pulses; applying them to nuclear "
                        "pulses is an extrapolation.")
     if kind == "fish":
@@ -372,6 +396,8 @@ def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> 
         _radiation(burst, receiver, env, a, human=True)
     elif kind == "ship":
         _ship(burst, receiver, env, a)
+    elif kind == "bird":
+        _bird(burst, receiver, env, a)
     else:
         raise ValueError(f"Unknown receiver kind {kind!r}")
     return a

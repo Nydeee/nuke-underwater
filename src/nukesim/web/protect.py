@@ -43,7 +43,7 @@ class Settings:
 
 
 # Requests that do more work cost more of the allowance (1 token = one quick request).
-COST = {"/api/field": 6, "/api/assess": 2, "/api/timeline": 2}
+COST = {"/api/field": 6, "/api/assess": 2, "/api/timeline": 2, "/api/zones": 3}
 EXEMPT = ("/healthz",)
 
 

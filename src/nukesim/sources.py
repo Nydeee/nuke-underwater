@@ -17,6 +17,25 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {
+    "damon1974": Source(
+        key="damon1974",
+        citation=("Damon, E. G., Richmond, D. R., Fletcher, E. R. & Jones, R. K. (1974). The Tolerance of Birds to "
+                  "Airblast. Lovelace Foundation, DNA 3314F (DTIC AD0785259)."),
+        url="https://archive.org/details/DTIC_AD0785259",
+        notes=("Criteria for birds in the open at sea level, incident overpressure (pp. 30-31): 5 psi no injuries, "
+               "10 psi slight to extensive injuries, 20 psi about 50% mortality. Birds of 0.1-4.2 kg."),
+    ),
+    "donaldson1953": Source(
+        key="donaldson1953",
+        citation=("Donaldson, L. R. et al. (1953). Radiobiological Studies at Eniwetok Before and After Mike Shot, "
+                  "WT-616 (birds burned near the 10.4 Mt Mike shot; no exposures given)."),
+    ),
+    "snay1957": Source(
+        key="snay1957",
+        citation=("Snay, H. G. et al. (1957). Predictions of Underwater Explosion Phenomena, Operation WIGWAM "
+                  "(DTIC AD0338338)."),
+        notes="Sec. 3.5: measured WIGWAM bubble periods 2.87, 2.6, 1.9 s; calculated rise 675 ft and 793 ft per cycle.",
+    ),
     "tm23_200": Source(
         key="tm23_200",
         citation=(

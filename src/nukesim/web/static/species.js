@@ -30,6 +30,10 @@ export const SPECIES = {
   green:       { group: "turtle", kind: "turtle", label: "Green turtle", emoji: "🐢", mass_kg: 150, length_m: 1.1, z_m: -5 },
   loggerhead:  { group: "turtle", kind: "turtle", label: "Loggerhead turtle", emoji: "🐢", mass_kg: 115, length_m: 0.95, z_m: -5 },
   leatherback: { group: "turtle", kind: "turtle", label: "Leatherback turtle", emoji: "🐢", mass_kg: 500, length_m: 1.8, z_m: -10 },
+  // ---- seabirds (blast criteria: Damon et al. 1974, birds of 0.1-4.2 kg)
+  gull:        { group: "bird", kind: "bird", label: "Herring gull", emoji: "🕊", mass_kg: 1.0, length_m: 0.6, z_m: 30 },
+  tern:        { group: "bird", kind: "bird", label: "Common tern", emoji: "🕊", mass_kg: 0.12, length_m: 0.35, z_m: 15 },
+  frigatebird: { group: "bird", kind: "bird", label: "Frigatebird", emoji: "🐦‍⬛", mass_kg: 1.3, length_m: 1.0, z_m: 80 },
   // ---- people
   diver:    { group: "diver", kind: "diver", label: "Diver", emoji: "🤿", mass_kg: 75, length_m: 1.8, z_m: -10 },
   boat:     { group: "boat", kind: "person", label: "Person on a boat", emoji: "🚤", length_m: 8, z_m: 2 },
@@ -47,6 +51,7 @@ export const GROUPS = [
   { key: "fish", label: "Fish", emoji: "🐟" },
   { key: "big", label: "Big animals", emoji: "🐬" },
   { key: "turtle", label: "Turtle", emoji: "🐢" },
+  { key: "bird", label: "Seabird", emoji: "🕊" },
   { key: "diver", label: "Diver", emoji: "🤿" },
   { key: "boat", label: "Boats & ships", emoji: "🚢" },
 ];

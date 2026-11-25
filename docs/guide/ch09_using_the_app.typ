@@ -99,6 +99,20 @@ and fireball can be seen), close to real time while the blast passes, then faste
 rises. The things in the sea are placed at distances that scale with the cube root of the yield, so
 every bomb size shows a range from "would not survive" to "unharmed".
 
+*Extras in Simple mode:*
+- The start screen floats over the calm sea. *Surprise me* picks everything at random.
+- While the countdown runs, a short fact from the sources appears.
+- *In real-world terms* compares the results with familiar things: the fireball against football pitches,
+  the cloud against the tallest building or Mount Everest, the area where fish were killed against
+  Manhattan.
+- *Share* makes a picture with the main results and a link that opens the same setup, ready to
+  detonate.
+- *Dive into the deep* is a page you scroll down, from the surface to the deep ocean floor. At each
+  depth it shows the animals that live there (sardines, dolphins, tuna, sperm whales, anglerfish,
+  beaked whales and more) and what the chosen burst would do to them at the distance you set. The
+  verdicts come from the same injury models; the typical depths are rounded field-guide values.
+- On phones the app picks lighter graphics, and the panels rearrange to fit.
+
 *Sound* (the speaker button or `M`) is timed by the physics:
 - the boom comes when the simulator's blast front actually reaches the camera, so far away it comes
   late, as in real life;

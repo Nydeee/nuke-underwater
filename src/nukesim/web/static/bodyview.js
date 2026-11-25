@@ -24,6 +24,7 @@ const PART_NAMES = {
 function partsFor(kind, e) {
   const n = e.name;
   if (n.startsWith("ship damage")) return [];
+  if (n.includes("bird")) return ["body"];
   if (n.includes("radiation")) return ["body"];
   if (n.includes("burns")) return ["skin"];
   if (n.includes("flash blindness")) return ["eyes"];

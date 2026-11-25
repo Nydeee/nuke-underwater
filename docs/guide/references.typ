@@ -6,9 +6,12 @@
 - U.S. Army Corps of Engineers (1991). _Underwater Blast Monitoring._ Engineer Technical Letter ETL 1110-8-11(FR), 15 July 1991.
 - CDC. _Acute Radiation Syndrome: Information for Clinicians._
 - Continental Shelf Associates (2004). _Explosive removal of offshore structures._ MMS OCS Study 2003-070.
+- Damon, E. G., Richmond, D. R., Fletcher, E. R. & Jones, R. K. (1974). _The Tolerance of Birds to Airblast._ Lovelace Foundation, DNA 3314F.
 - Defense Nuclear Agency (1978). _Capabilities of Nuclear Weapons_, DNA-EM-1, Ch. 3: Thermal Radiation Phenomena (DTIC ADA955387).
 - Eneva, M., Stevens, J. L. & Murphy, J. R. (2004). _Analysis of Russian Hydroacoustic Data._ DTRA-TR-01-19 (reproducing EM-1, 1996, Ch. 5).
 - Eneva, M. et al. (2000). Effect of charge depth in Russian hydroacoustic data from nuclear and HE explosions. _22nd Seismic Research Review._
+- Donaldson, L. R. et al. (1953). _Radiobiological Studies at Eniwetok Before and After Mike Shot._ WT-616.
+- Emery, K. O., Tracey, J. I. & Ladd, H. S. (1954). _Geology of Bikini and Nearby Atolls._ USGS Professional Paper 260-A.
 - ENSI (2018). Expert report ENSI33/606 (summary of ICRP and UNSCEAR dose-rate benchmarks for biota).
 - Fletcher, E. R. et al. (1962). _Nuclear Bomb Effects Computer (Including Slide-rule Design and Curve Fits for Weapons Effects)._ USAEC report CEX-62.2.
 - Friedlander, F. G. (1946). The diffraction of sound pulses. I. _Proc. R. Soc. Lond. A_ 186, 322--344.
@@ -27,7 +30,9 @@
 - Pope, R. M. & Fry, E. S. (1997). Absorption spectrum (380--700 nm) of pure water. II. _Appl. Opt._ 36, 8710--8723.
 - Armed Forces Special Weapons Project (1957, Change 1 1960). _Capabilities of Atomic Weapons_, TM 23-200 / OPNAV 03400.1B (declassified).
 - Strom, D. J. (2003). _Health Impacts from Acute Radiation Exposure._ PNNL-14424.
+- OpenStreetMap contributors. Bikini Atoll (relation 3973841), ODbL.
 - Sawyers, K. N. (1968). Underwater sound pressure from sonic booms. _J. Acoust. Soc. Am._ 44, 523--524.
+- Snay, H. G. et al. (1957). _Predictions of Underwater Explosion Phenomena_, Operation WIGWAM (DTIC AD0338338).
 - Sohn, R. A., Vernon, F., Hildebrand, J. A. & Webb, S. C. (2000). Field measurements of sonic boom penetration into the ocean. _J. Acoust. Soc. Am._ 107, 3073--3083.
 - Sparrow, V. W. (1995). The effect of aircraft speed on the penetration of sonic boom noise into a flat ocean. NASA N95-14887.
 - Segelstein, D. J. (1981). _The complex refractive index of water._ M.S. thesis, University of Missouri--Kansas City.

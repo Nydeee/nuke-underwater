@@ -10,6 +10,8 @@
 
 import * as THREE from "three";
 import { speciesOf, ALIASES } from "./species.js";
+import { createHuman, humansReady } from "./humans.js";
+import { createAnimal } from "./animals.js";
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...extra });
 const C = (h) => new THREE.Color(h);
@@ -39,17 +41,25 @@ function body({ h = 0.25, w = 0.16, profile, back, belly, paint, line = 0.5, sof
   }
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   g.computeVertexNormals();
-  return new THREE.Mesh(g, std(0xffffff, { vertexColors: true, roughness: rough, metalness: 0.12 }));
+  return new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, roughness: rough, metalness: 0.12,
+    clearcoat: 0.6, clearcoatRoughness: 0.3 }));   // a wet, glossy skin
 }
 // common outlines
 const teardrop = (k = 0.75, e = 0.85, stem = 0.06) => (u) => Math.max(Math.pow(Math.sin(Math.PI * Math.pow(u, k)), e), u < 0.12 ? stem + u : 0);
 const torpedo = (u) => Math.pow(Math.sin(Math.PI * Math.pow(u, 0.62)), 0.7) * (u < 0.1 ? 0.35 + 6 * u : 1);
 
 // a flat fin from an outline [[x, y], ...]; vertical by default, horizontal with flat = true
-function fin(pts, color, { x = 0, y = 0, z = 0, flat = false, rz = 0, ry = 0, rx = 0, opacity = 1 } = {}) {
-  const s = new THREE.Shape();
-  pts.forEach(([a, b], i) => (i ? s.lineTo(a, b) : s.moveTo(a, b)));
-  const m = new THREE.Mesh(new THREE.ShapeGeometry(s), std(color, { side: THREE.DoubleSide, transparent: opacity < 1, opacity, roughness: 0.6 }));
+// The outline is smoothed (a spline through the points) and given a little thickness, so fins look
+// like fins rather than flat paper cut-outs.
+function fin(pts, color, { x = 0, y = 0, z = 0, flat = false, rz = 0, ry = 0, rx = 0, opacity = 1, sharp = false } = {}) {
+  const v = pts.map(([a, b]) => new THREE.Vector2(a, b));
+  const outline = sharp ? v : new THREE.SplineCurve([...v, v[0]]).getPoints(v.length * 8);
+  const size = Math.max(...pts.map(([a, b]) => Math.hypot(a, b)), 0.05);
+  const t = Math.min(0.012, size * 0.06);
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(outline),
+    { depth: t, bevelEnabled: true, bevelThickness: t * 0.5, bevelSize: t * 0.6, bevelSegments: 2, curveSegments: 4 });
+  geo.translate(0, 0, -t / 2);
+  const m = new THREE.Mesh(geo, std(color, { side: THREE.DoubleSide, transparent: opacity < 1, opacity, roughness: 0.5 }));
   if (flat) m.rotation.x = -Math.PI / 2;
   m.rotation.z += rz; m.rotation.y += ry; m.rotation.x += rx;
   m.position.set(x, y, z);
@@ -160,7 +170,7 @@ function mammalModel(key) {
     h = 0.2; w = 0.18; finCol = 0x3d2e22;
     b = body({ h, w, profile: (u) => Math.pow(Math.sin(Math.PI * Math.pow(u, 0.9)), 0.8) * (u > 0.82 ? 0.75 : 1) * (u < 0.1 ? 0.35 + 6 * u : 1),
       back: 0x5e4836, belly: 0x8a6c50, rough: 0.35 });
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), b.material);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.075, 18, 14), new THREE.MeshPhysicalMaterial({ color: 0x6a5240, roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.3 }));
     head.scale.set(1.5, 1, 1); head.position.set(0.47, 0.03, 0); g.add(head);
     for (const s of [1, -1]) {
       g.add(fin([[0, 0], [-0.04, 0.0], [-0.2, -0.05], [-0.2, -0.09], [0, -0.04]], finCol, { x: 0.2, y: -0.06, z: s * 0.08, ry: s * 0.6, rx: s * 0.8 }));
@@ -214,13 +224,27 @@ function turtleModel(key) {
       else if (y > 0 && (Math.abs(Math.sin(u * 14)) < 0.1 || Math.abs(Math.sin(z * 4.5)) < 0.08)) c.multiplyScalar(0.55);   // scute seams
     } });
   shell.scale.set(0.82, 0.45, 1);
-  const skin = std(skinCol, { roughness: 0.7 });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(key === "loggerhead" ? 0.1 : 0.08, 14, 10), skin);
-  head.scale.set(1.3, 0.9, 1); head.position.set(0.47, 0.02, 0);
-  g.add(shell, head);
-  for (const [x, z, ry, l] of [[0.22, 0.3, 0.55, 0.38], [0.22, -0.3, -0.55, 0.38], [-0.3, 0.2, -0.5, 0.16], [-0.3, -0.2, 0.5, 0.16]]) {
-    const f = fin([[0, 0], [l * 0.3, 0.05], [l, 0.01], [l, -0.02], [0, -0.04]], skinCol, { x, y: -0.02, z, flat: true });
-    f.rotation.z = 0; f.rotation.y = Math.PI + ry; g.add(f);
+  const skin = std(skinCol, { roughness: 0.65 });
+  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.08, 6, 12), skin);
+  neck.rotation.z = Math.PI / 2; neck.position.set(0.4, 0.0, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(key === "loggerhead" ? 0.095 : 0.078, 18, 14), skin);
+  head.scale.set(1.35, 0.85, 0.95); head.position.set(0.5, 0.02, 0);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.06, 10), std(0x4a4632, { roughness: 0.5 }));
+  beak.rotation.z = -Math.PI / 2; beak.position.set(0.61, 0.0, 0); beak.scale.set(1, 1, 0.8);
+  g.add(shell, neck, head, beak);
+  // flippers: long swept-back paddles in front, short ones at the back (turned so they point out and back)
+  const big = key === "leatherback" ? 1.25 : 1;
+  for (const s of [1, -1]) {
+    for (const [x, len, sweep, front] of [[0.18, 0.5 * big, 0.55, true], [-0.32, 0.18, 0.9, false]]) {
+      const pts = front
+        ? [[0, 0.045], [0.14 * len / 0.5, 0.07], [0.32 * len / 0.5, 0.05], [len, -0.005], [0.42 * len / 0.5, -0.04], [0.2 * len / 0.5, -0.045], [0, -0.035]]
+        : [[0, 0.04], [len * 0.6, 0.05], [len, 0.0], [len * 0.6, -0.05], [0, -0.04]];
+      const f = fin(pts, skinCol, { x, y: -0.03, z: s * 0.26, flat: true });
+      f.rotation.order = "YXZ";   // lay it flat first, then turn it
+      f.rotation.y = -s * (Math.PI / 2 + sweep);
+      f.rotation.x = -Math.PI / 2 + s * 0.12;   // a little droop
+      g.add(f);
+    }
   }
   eyes(g, 0.55, 0.04, 0.05, 0.013);
   return { g, bodyMats: [shell.material, skin], anat: { lungs: [0.02, 0.08, 0, 0.2], gut: [-0.02, -0.03, 0, 0.16], ears: [[0.5, 0.02, 0.07], [0.5, 0.02, -0.07], 0.03], body: [0, 0, 0, 0.45], skinSide: "+z" }, h: 0.45 };
@@ -228,31 +252,80 @@ function turtleModel(key) {
 
 // ---------------------------------------------------------------- people
 // A person, about 1 unit tall, standing on y = 0 (feet) facing +x.
-export function humanModel({ suit = 0x2f4a6b, skin = 0xd9a882, pants = 0x2b2f36 } = {}) {
-  const g = new THREE.Group();
-  const mSkin = std(skin, { roughness: 0.6 }), mSuit = std(suit, { roughness: 0.7 }), mPants = std(pants, { roughness: 0.8 });
-  const part = (geo, mat, x, y, z, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; g.add(m); return m; };
-  for (const s of [1, -1]) {
-    part(new THREE.CapsuleGeometry(0.055, 0.36, 4, 10), mPants, 0, 0.24, s * 0.07);          // legs
-    part(new THREE.CapsuleGeometry(0.04, 0.3, 4, 10), mSuit, 0, 0.61, s * 0.19, s * 0.08);    // arms
-    part(new THREE.SphereGeometry(0.04, 10, 8), mSkin, 0, 0.42, s * 0.2);                       // hands
+const HUMAN_ANAT = { ears: [[0, 0.92, 0.085], [0, 0.92, -0.085], 0.025], lungs: [0.0, 0.66, 0, 0.12], gut: [0.0, 0.48, 0, 0.1], head: [0, 0.92, 0, 0.1],
+  body: [0, 0.5, 0, 0.5], skinSide: "+x", eyesAt: [0.08, 0.94, 0, 0.03] };
+export function humanModel(opts = {}) {
+  if (humansReady()) {   // the rigged, animated person (humans.js)
+    const rig = createHuman({ pose: opts.pose || "stand", outfit: opts.outfit || "deck" });
+    rig.group.userData.rig = rig;
+    return { g: rig.group, rig, bodyMats: [rig.skinned.material], clothMats: [], anat: HUMAN_ANAT };
   }
-  const torso = part(new THREE.CapsuleGeometry(0.13, 0.24, 6, 14), mSuit, 0, 0.62, 0);
-  torso.scale.set(0.75, 1, 1.15);
-  part(new THREE.CylinderGeometry(0.04, 0.045, 0.06, 10), mSkin, 0, 0.83, 0);                // neck
-  const head = part(new THREE.SphereGeometry(0.085, 16, 12), mSkin, 0, 0.92, 0);
-  head.scale.set(1, 1.15, 0.95);
-  const hair = part(new THREE.SphereGeometry(0.088, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0x3a2a1e), -0.01, 0.94, 0);
-  hair.scale.set(1, 1.1, 0.97);
-  eyes(g, 0.075, 0.94, 0.03, 0.01);
+  return simpleHuman(opts);
+}
+function simpleHuman({ suit = 0x2f4a6b, skin = 0xd9a882, pants = 0x2b2f36, shoes = 0x1b1d21, hair = 0x3a2a1e } = {}) {
+  const g = new THREE.Group();
+  const mSkin = std(skin, { roughness: 0.55 }), mSuit = std(suit, { roughness: 0.75 }), mPants = std(pants, { roughness: 0.8 }), mShoe = std(shoes, { roughness: 0.6 });
+  const part = (geo, mat, x, y, z, rz = 0, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; m.rotation.x = rx; g.add(m); return m; };
+  // torso: a smooth shape from hips to shoulders (wider at the chest)
+  const prof = [[0.0, 0.40], [0.105, 0.41], [0.12, 0.47], [0.115, 0.55], [0.13, 0.66], [0.145, 0.74], [0.12, 0.79], [0.05, 0.815], [0, 0.82]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(prof, 24), mSuit);
+  torso.scale.set(0.72, 1, 1); g.add(torso);
+  for (const s of [1, -1]) {
+    part(new THREE.CapsuleGeometry(0.05, 0.17, 6, 12), mPants, 0, 0.32, s * 0.065);              // thigh
+    part(new THREE.CapsuleGeometry(0.042, 0.17, 6, 12), mPants, 0, 0.13, s * 0.065);             // shin
+    const foot = part(new THREE.CapsuleGeometry(0.03, 0.07, 4, 10), mShoe, 0.03, 0.025, s * 0.065, Math.PI / 2);
+    foot.scale.set(1, 1, 1.2);
+    part(new THREE.SphereGeometry(0.05, 12, 10), mSuit, 0, 0.765, s * 0.15);                     // shoulder
+    part(new THREE.CapsuleGeometry(0.036, 0.14, 6, 12), mSuit, 0, 0.66, s * 0.175, s * 0.06);     // upper arm
+    part(new THREE.CapsuleGeometry(0.03, 0.13, 6, 12), mSkin, 0.005, 0.5, s * 0.19, s * 0.03);    // forearm
+    const hand = part(new THREE.SphereGeometry(0.032, 10, 8), mSkin, 0.01, 0.405, s * 0.195);
+    hand.scale.set(0.8, 1.25, 0.6);
+  }
+  part(new THREE.CylinderGeometry(0.035, 0.04, 0.06, 12), mSkin, 0, 0.84, 0);                     // neck
+  const head = part(new THREE.SphereGeometry(0.075, 20, 16), mSkin, 0.005, 0.915, 0);
+  head.scale.set(1.02, 1.18, 0.92);
+  const nose = part(new THREE.ConeGeometry(0.012, 0.03, 8), mSkin, 0.08, 0.91, 0, -Math.PI / 2);
+  nose.scale.set(1, 1, 0.8);
+  const hairCap = part(new THREE.SphereGeometry(0.078, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), std(hair, { roughness: 0.9 }), -0.006, 0.93, 0);
+  hairCap.scale.set(1.03, 1.15, 0.97);
+  for (const s of [1, -1]) part(new THREE.SphereGeometry(0.016, 8, 8), mSkin, 0, 0.915, s * 0.07);   // ears
+  eyes(g, 0.068, 0.93, 0.026, 0.009);
   return { g, bodyMats: [mSkin], clothMats: [mSuit, mPants],
     anat: { ears: [[0, 0.92, 0.085], [0, 0.92, -0.085], 0.025], lungs: [0.0, 0.66, 0, 0.12], gut: [0.0, 0.48, 0, 0.1], head: [0, 0.92, 0, 0.1],
       body: [0, 0.5, 0, 0.5], skinSide: "+x", eyesAt: [0.08, 0.94, 0, 0.03] } };
 }
 
 function diverModel() {
+  if (humansReady()) return riggedDiver();
+  return simpleDiver();
+}
+function riggedDiver() {
+  const p = humanModel({ pose: "swim", outfit: "wetsuit" });
+  const g = new THREE.Group();
+  g.add(p.g);
+  p.g.updateMatrixWorld(true);
+  const b = p.rig.bones, gear = std(0xf2c14e), steel = std(0xcfd3d8, { metalness: 0.6, roughness: 0.3 });
+  const place = (mesh, bone, local) => {   // put gear at a point given in the diver's frame, then let it ride on a bone
+    mesh.position.copy(local); g.add(mesh); g.updateMatrixWorld(true);
+    if (bone) bone.attach(mesh);
+  };
+  const tank = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 6, 14), steel); tank.rotation.z = Math.PI / 2;
+  place(tank, b.Spine2, new THREE.Vector3(0.05, 0.13, 0));
+  const vest = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.27), gear);
+  place(vest, b.Spine2, new THREE.Vector3(0.06, 0.07, 0));
+  const mask = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.1), std(0x7fd3ff, { metalness: 0.3, roughness: 0.1 }));
+  place(mask, b.Head, new THREE.Vector3(0.43, -0.07, 0));
+  for (const [s, foot] of [[1, b.LeftFoot], [-1, b.RightFoot]]) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.012, 0.1), gear);
+    place(f, foot, new THREE.Vector3(-0.6, -0.02, s * 0.06));
+  }
+  return { g, human: p.g, rig: p.rig, bodyMats: p.bodyMats, anat: { ears: [[0.41, 0, 0.07], [0.41, 0, -0.07], 0.025], lungs: [0.16, 0, 0, 0.12],
+    gut: [-0.02, 0, 0, 0.1], head: [0.42, 0, 0, 0.1], body: [0, 0, 0, 0.5], skinSide: "+y" }, h: 0.3 };
+}
+function simpleDiver() {
   // the person lying horizontally (swimming), head at +x
-  const p = humanModel({ suit: 0x1f2328, pants: 0x1f2328 });
+  const p = simpleHuman({ suit: 0x1f2328, pants: 0x1f2328 });
   const g = new THREE.Group();
   p.g.rotation.z = -Math.PI / 2; p.g.position.set(-0.5, 0, 0);
   g.add(p.g);
@@ -269,7 +342,7 @@ function diverModel() {
   // anatomy rotated with the body: (x, y) -> (y - 0.5, -x)
   const rot = ([x, y, z, r]) => [y - 0.5, -x, z, r];
   const a = p.anat;
-  return { g, bodyMats: p.bodyMats, anat: { ears: [[a.ears[0][1] - 0.5, 0, a.ears[0][2]], [a.ears[1][1] - 0.5, 0, a.ears[1][2]], a.ears[2]],
+  return { g, human: p.g, bodyMats: p.bodyMats, anat: { ears: [[a.ears[0][1] - 0.5, 0, a.ears[0][2]], [a.ears[1][1] - 0.5, 0, a.ears[1][2]], a.ears[2]],
     lungs: rot(a.lungs), gut: rot(a.gut), head: rot(a.head), body: [0, 0, 0, 0.5], skinSide: "+y" }, h: 0.3 };
 }
 
@@ -298,6 +371,32 @@ function boatModel() {
   return { g, bodyMats: person.bodyMats, anat: null, h: 0.3, person: person.g };
 }
 
+// ---------------------------------------------------------------- seabirds (wings flap: userData.wings)
+function birdModel(key) {
+  const g = new THREE.Group();
+  const dark = key === "frigatebird";
+  const bodyMat = std(dark ? 0x1b1d22 : 0xf3f3f0, { roughness: 0.6 }), wingMat = std(dark ? 0x15171b : key === "tern" ? 0xdfe3e7 : 0xb9c0c7, { side: THREE.DoubleSide, roughness: 0.7 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.42, 6, 12), bodyMat);
+  body.rotation.z = Math.PI / 2; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), dark ? bodyMat : std(key === "tern" ? 0x111111 : 0xf6f6f3));
+  head.position.set(0.3, 0.04, 0); g.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.13, 8), std(key === "gull" ? 0xf2c14e : key === "tern" ? 0xe0412e : 0x8a8f96));
+  beak.rotation.z = -Math.PI / 2; beak.position.set(0.41, 0.03, 0); g.add(beak);
+  const tail = fin(key === "frigatebird" ? [[0, 0.02], [-0.3, 0.09], [-0.22, 0], [-0.3, -0.09], [0, -0.02]] : [[0, 0.03], [-0.16, 0.06], [-0.16, -0.06], [0, -0.03]], dark ? 0x15171b : 0xe9ecee, { x: -0.28, flat: true });
+  g.add(tail);
+  const span = key === "frigatebird" ? 1.15 : key === "tern" ? 0.85 : 0.75;
+  const wings = [1, -1].map((s) => {
+    const pivot = new THREE.Group(); pivot.position.set(0.04, 0.04, s * 0.06);
+    const w = fin([[0.08, 0], [0.02, s * span * 0.55], [-0.12, s * span], [-0.16, s * span * 0.6], [-0.14, 0]], 0xffffff, { flat: true });
+    w.material = wingMat;
+    pivot.add(w); g.add(pivot);
+    return pivot;
+  });
+  eyes(g, 0.35, 0.07, 0.05, 0.01);
+  g.userData.wings = wings;
+  return { g, bodyMats: [bodyMat], anat: { body: [0, 0, 0, 0.3], head: [0.3, 0.04, 0, 0.08], skinSide: "+z" }, h: 0.2 };
+}
+
 // ---------------------------------------------------------------- ships (waterline at y = 0, bow at +x)
 function hullGeo(len, beam, depth, bowStart = 0.25, draft = 0.4) {
   const g = new THREE.BoxGeometry(len, depth, beam, 16, 3, 3);
@@ -318,7 +417,7 @@ function hullGeo(len, beam, depth, bowStart = 0.25, draft = 0.4) {
 }
 function crew(g, n, xs, y, scale, z = 0.02) {
   for (let i = 0; i < n; i++) {
-    const p = humanModel({ suit: [0x2f4a6b, 0xd9822b, 0x3d6b3a][i % 3] });
+    const p = humanModel({ suit: [0x2f4a6b, 0xd9822b, 0x3d6b3a][i % 3], outfit: i % 2 ? "orange" : "deck" });
     p.g.scale.setScalar(scale);
     p.g.position.set(xs[0] + (xs[1] - xs[0]) * (i / Math.max(n - 1, 1)), y, (i % 2 ? 1 : -1) * z);
     p.g.rotation.y = Math.PI / 2 + (i % 3) * 0.7;
@@ -389,9 +488,13 @@ export function makeModel(r, color) {
   if (r.kind === "person") m = boatModel();
   else if (r.kind === "ship") m = shipModel(r.ship_type || "destroyer");
   else if (r.kind === "diver") m = diverModel();
-  else if (r.kind === "turtle") m = turtleModel(key || "green");
-  else if (r.kind === "fish") m = fishModel(sp && sp.kind === "fish" ? key : "cod");
-  else m = mammalModel(sp && sp.kind === "mammal" ? key : ((r.mass_kg ?? 0) > 1000 ? "humpback" : "dolphin"));
+  else {
+    const k = r.kind === "bird" ? key || "gull" : r.kind === "turtle" ? key || "green"
+      : r.kind === "fish" ? (sp && sp.kind === "fish" ? key : "cod")
+      : (sp && sp.kind === "mammal" ? key : ((r.mass_kg ?? 0) > 1000 ? "humpback" : "dolphin"));
+    m = artAnimal(r.kind, k)   // an artist-made model when it is loaded, else the one built here
+      || (r.kind === "bird" ? birdModel(k) : r.kind === "turtle" ? turtleModel(k) : r.kind === "fish" ? fishModel(k) : mammalModel(k));
+  }
   // status ring (technical view): its material is what gets recoloured by injury level
   const statusMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 8, 48), statusMat);
@@ -402,6 +505,8 @@ export function makeModel(r, color) {
   m.g.userData.bodyMats = m.bodyMats;
   m.g.userData.anatomy = m.anat;
   m.g.userData.person = m.person || null;
+  m.g.userData.human = m.human || null;
+  m.g.userData.rig = m.rig || m.person?.userData?.rig || null;   // a rigged person (for the ragdoll)
   m.g.userData.ship = !!m.ship;
   return m.g;
 }
@@ -416,4 +521,68 @@ export function realLength(r) {
   if (r.kind === "turtle") return 1.0;
   if (r.kind === "fish") return Math.max(0.1, 0.25 * Math.cbrt((r.mass_kg ?? 0.5) / 0.15));
   return Math.max(1.5, 2.3 * Math.cbrt((r.mass_kg ?? 150) / 150));
+}
+
+/** An artist-made animal (animals.js) with the same body layout as the ones built above. */
+function artAnimal(kind, key) {
+  const a = createAnimal(key);
+  if (!a) return null;
+  const h = Math.min(Math.max(a.h, 0.12), 0.5);
+  const anat = kind === "fish" ? { swimBladder: [0.03, 0.03 * h / 0.25, 0, 0.18], organs: [0.12, -0.03, 0, 0.14], gills: [0.33, 0, 0, 0.08], head: [0.4, 0, 0, 0.1], body: [0, 0, 0, 0.45], skinSide: "+z" }
+    : kind === "turtle" ? { lungs: [0.02, 0.08, 0, 0.2], gut: [-0.02, -0.03, 0, 0.16], ears: [[0.4, 0.02, 0.07], [0.4, 0.02, -0.07], 0.03], body: [0, 0, 0, 0.45], skinSide: "+z" }
+    : kind === "bird" ? { body: [0, 0, 0, 0.3], head: [0.35, 0.04, 0, 0.08], skinSide: "+z" }
+    : mammalAnat(h, h * 0.9, key === "sperm" ? 0.3 : 0.38);
+  return { g: a.g, bodyMats: a.bodyMats, anat, h };
+}
+
+// ---------------------------------------------------------------- the bomb itself (drawing only; generic shapes)
+/** An air-dropped bomb, 1 unit long, nose at +x. */
+export function bombModel() {
+  const g = new THREE.Group();
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0x5d6246, roughness: 0.45, metalness: 0.35, clearcoat: 0.3 });
+  const prof = [[0, -0.5], [0.07, -0.47], [0.1, -0.38], [0.11, 0.1], [0.105, 0.25], [0.085, 0.36], [0.055, 0.44], [0.02, 0.49], [0, 0.5]]
+    .map(([r, x]) => new THREE.Vector2(r, x));
+  const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 32), paint);
+  body.rotation.z = -Math.PI / 2; g.add(body);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.111, 0.111, 0.03, 32, 1, true), std(0xe2b632, { roughness: 0.5 }));
+  band.rotation.z = Math.PI / 2; band.position.x = 0.2; g.add(band);
+  for (let k = 0; k < 4; k++) {   // tail fins in a cross, with a ring around them
+    const f = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.004, 0.13), paint);
+    f.position.set(-0.4, 0, 0); f.rotation.x = (k * Math.PI) / 2;
+    f.geometry.translate(0, 0, 0.1);
+    g.add(f);
+  }
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.008, 6, 32), paint);
+  ring.rotation.y = Math.PI / 2; ring.position.x = -0.45; g.add(ring);
+  return g;
+}
+
+/** A sealed canister for an underwater test, 1 unit tall, with a lifting eye on top. */
+export function canisterModel() {
+  const g = new THREE.Group();
+  const steel = new THREE.MeshPhysicalMaterial({ color: 0x8a9096, roughness: 0.4, metalness: 0.6, clearcoat: 0.2 });
+  const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.45, 8, 24), steel);
+  g.add(c);
+  for (const y of [-0.15, 0.15]) {
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.015, 6, 32), std(0x3d4248));
+    hoop.rotation.x = Math.PI / 2; hoop.position.y = y; g.add(hoop);
+  }
+  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.015, 6, 16), steel);
+  eye.position.y = 0.55; g.add(eye);
+  return g;
+}
+
+/** A small landing ship that held the device on a cable (as LSM-60 did for BAKER), 1 unit long. */
+export function bargeModel() {
+  const g = new THREE.Group();
+  const grey = std(0x7d8791, { roughness: 0.55, metalness: 0.2 });
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.17, 8, 1, 2), grey);
+  hull.position.y = 0.02; g.add(hull);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.12), grey);
+  bridge.position.set(-0.32, 0.12, 0.02); g.add(bridge);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.005, 0.18, 6), std(0x4f565e));
+  mast.position.set(-0.32, 0.25, 0.02); g.add(mast);
+  const winch = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 12), std(0x3d4248));
+  winch.rotation.x = Math.PI / 2; winch.position.set(0.05, 0.1, 0); g.add(winch);
+  return g;
 }

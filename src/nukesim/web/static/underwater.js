@@ -249,11 +249,28 @@ export function initUnderwater({ scene, camera, renderer, sunDir, normalMap, glo
 
   // ------------------------------------------------ gas bubble (timeline: bubble)
   const bubble = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({
-    color: 0xd9eef5, metalness: 1, roughness: 0.12, envMapIntensity: 1.6, transparent: true, opacity: 0.92,
+    color: 0xa9cdd8, metalness: 0.55, roughness: 0.28, envMapIntensity: 1.4, transparent: true, opacity: 0.8,
     clippingPlanes: [clipSurface, clipFloor], fog: false,
   }));
   const bubbleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
   group.add(bubble, bubbleGlow);
+  // a wobbly surface: the bubble wall ripples, more strongly as it collapses (drawing, not physics)
+  const wob = { time: { value: 0 }, amp: { value: 0.04 } };
+  bubble.material.onBeforeCompile = (sh) => {
+    sh.uniforms.wTime = wob.time; sh.uniforms.wAmp = wob.amp;
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
+      uniform float wTime; uniform float wAmp;
+      float wn(vec3 p) { return sin(p.x * 3.1 + wTime * 2.3) * sin(p.y * 2.7 - wTime * 1.7) * sin(p.z * 3.3 + wTime * 2.9); }`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>
+      float d = wn(position * 1.3) + 0.5 * wn(position * 3.1 + 7.0);
+      transformed += normal * d * wAmp;`);
+  };
+  // the pressure wave sent out each time the bubble collapses (timeline: bubble.pulses_s)
+  const pulseShells = [0, 1].map(() => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), rimMat(0xffe9c8));
+    m.frustumCulled = false; m.visible = false; group.add(m);
+    return m;
+  });
 
   // ------------------------------------------------ per frame
   let time = 0;
@@ -352,15 +369,31 @@ export function initUnderwater({ scene, camera, renderer, sunDir, normalMap, glo
     const b = s.data && s.data.bubble;
     if (b && t > 0 && t <= b.end_s) {
       const r = interp(b.t_s, b.radius_m, t);
+      const zc = b.centre_z_m ? interp(b.t_s, b.centre_z_m, t) : b.center_z_m;   // it rises after its first maximum
       bubble.visible = bubbleGlow.visible = r > 0.5;
-      bubble.scale.setScalar(r);
-      bubble.position.set(0, b.center_z_m, 0);
+      const rising = zc > b.center_z_m + 1;
+      bubble.scale.set(r, r * (rising ? 0.86 : 1), r);   // a rising bubble flattens a little (drawing)
+      bubble.position.set(0, zc, 0);
+      wob.time.value = time;
+      wob.amp.value = 0.06 + 0.16 * Math.max(0, 1 - r / b.max_radius_m);   // ripples grow as it shrinks
       const hot = Math.max(0, 1 - t / Math.max(b.end_s * 0.15, 1e-3));   // glowing at first (illustrative)
       bubbleGlow.position.copy(bubble.position);
       bubbleGlow.scale.setScalar(r * 3.2);
       bubbleGlow.material.opacity = 0.25 + 0.75 * hot;
       bubble.material.emissive.setRGB(1.0 * hot, 0.75 * hot, 0.4 * hot);
     } else bubble.visible = bubbleGlow.visible = false;
+    // bubble pulses: a faint shell racing out at the speed of sound from where the bubble collapsed
+    (b?.pulses_s || []).forEach((tp, i) => {
+      const m = pulseShells[i], dt = t - tp;
+      if (!m) return;
+      m.visible = dt > 0 && dt < 3;
+      if (!m.visible) return;
+      const zc = b.centre_z_m ? interp(b.t_s, b.centre_z_m, tp) : b.center_z_m;
+      m.position.set(0, zc, 0);
+      m.scale.setScalar(Math.max(1500 * dt, 1));
+      m.material.uniforms.opacity.value = 0.5 * (1 - dt / 3);
+    });
+    if (!b) pulseShells.forEach((m) => { m.visible = false; });
   }
 
   function setOn(on) { group.visible = on; }

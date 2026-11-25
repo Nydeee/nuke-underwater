@@ -3,18 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nukesim · Nuclear Burst on Water</title>
+  <title>What if a nuke exploded underwater</title>
+  <meta name="description" content="Pick a nuclear bomb and a spot in the sea, then watch what the science says happens to the fish, whales, divers and ships in and on the water.">
+  <!-- how the link looks when it is shared (social media, messaging apps) -->
+  <meta property="og:title" content="What if a nuke exploded underwater">
+  <meta property="og:description" content="Pick a nuclear bomb and a spot in the sea, then watch what the science says happens to the fish, whales, divers and ships in and on the water.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://whatifanukeexplodedunderwater.com/">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#f4f7fb">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
     { "imports": {
         "three": "./vendor/three/three.module.min.js",
-        "three/addons/": "./vendor/three/addons/"
+        "three/addons/": "./vendor/three/addons/",
+        "cannon-es": "./vendor/cannon-es/cannon-es.js"
     } }
   </script>
 </head>
 <body class="basic">
   <header id="topbar">
-    <div class="brand"><span class="logo">◎</span> nukesim <span class="tag">Nuclear burst on water simulator</span></div>
+    <div class="brand" title="whatifanukeexplodedunderwater.com"><span class="logo">◎</span> <span class="full">What if a nuke exploded underwater</span><span class="short">What if…</span></div>
     <label class="preset" title="Load a ready-made example">
       <select id="presetSel">
         <option value="">Example scenarios…</option>
@@ -69,6 +78,8 @@
 
     <details open>
       <summary>🌤 Conditions</summary>
+      <label title="Draw a real place around the burst">Place
+        <select id="place"><option value="open">Open sea</option><option value="bikini">Bikini Atoll (Crossroads tests, 1946)</option></select></label>
       <label title="Changes the look; at night the flash blinds people much farther away">Time of day
         <select id="timeOfDay"><option value="day">Day</option><option value="dawn">Dawn</option><option value="dusk">Dusk</option><option value="night">Night</option></select></label>
       <label title="Haze and fog absorb part of the heat (DNA EM-1)">Visibility
@@ -152,6 +163,11 @@
       <canvas id="falloutChart" width="360" height="190"></canvas>
       <p id="falloutInfo" class="help"></p>
     </details>
+    <details>
+      <summary>How far the danger reaches</summary>
+      <label class="check small"><input id="showZones" type="checkbox"> Draw the danger circles on the sea (realistic view)</label>
+      <div id="zonesBox"></div>
+    </details>
     <details class="expert" id="viewNotesBox">
       <summary>What the realistic view shows</summary>
       <ul id="viewNotes" class="notes"></ul>
@@ -160,7 +176,7 @@
 
   <div id="helpModal" class="modal" hidden>
     <div class="card">
-      <h2>Welcome to nukesim</h2>
+      <h2>What if a nuke exploded underwater</h2>
       <p>See what a nuclear burst over (or under) the sea does to the water and to the fish, whales,
         divers and boats in it, with every number taken from published sources.</p>
       <ol>
@@ -227,11 +243,35 @@
       <label class="check"><input id="autoPlay" type="checkbox" checked> Play the timeline when switching to the realistic view</label>
       <label class="check"><input id="showPins" type="checkbox" checked> Show marker pins in the realistic view</label>
       <label class="check"><input id="classicBasic" type="checkbox"> Show the older "Basic" level (the full panels with plain labels) as well as Simple and Expert</label>
+      <label class="check"><input id="schools" type="checkbox" checked> Schools of fish in the realistic view (each fish hit when the pulse reaches it)</label>
+      <label class="check"><input id="bigWaves" type="checkbox"> Exaggerate the waves (drawn 10x taller than they really are, so small waves can be seen)</label>
       <label class="check"><input id="reactions" type="checkbox" checked> Animate injuries on the 3D models (a jolt when the blast hits, badly hurt animals roll over, burned skin darkens; illustrative)</label>
       <div class="cardButtons">
         <button id="resetPrefs" class="ghost" title="Forget layout, units and preferences (saved scenarios are kept)">Reset layout &amp; preferences</button>
         <span style="flex:1"></span><button class="primary" data-close="settingsModal">Done</button>
       </div>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal" hidden>
+    <div class="card">
+      <h2>How does this work?</h2>
+      <p>This is a simulator, not a game engine: every distance, pressure, dose and time comes from published
+        science about nuclear weapons and the sea, mostly <i>The Effects of Nuclear Weapons</i> (Glasstone &amp; Dolan, 1977),
+        U.S. Navy studies of explosions and marine animals, and reports from the 1946 Crossroads tests at Bikini Atoll.</p>
+      <ul>
+        <li><b>The sizes are real.</b> The fireball, the cloud, the blast front and the waves are drawn at the size the models give.</li>
+        <li><b>The verdicts come from injury criteria</b> measured in tests: how much pressure hurts a fish's swim bladder, a dolphin's lungs, a person's ears.</li>
+        <li><b>Some things are only drawn</b>, like the shape of the cloud's puffs, how bodies tumble, and the spray. The app says which in Expert mode.</li>
+        <li>It is an educational tool. Real effects depend on many things it can't know, and it is not a substitute for detailed engineering models.</li>
+      </ul>
+      <p class="help">Switch to <b>Expert</b> (top right) to see every number, its source and its limits.</p>
+      <p class="help">Credits: people model "Animated Human" by Quaternius (public domain, CC0); animal models
+        "Fish", "Shark", "Dolphin", "Whale", "Fish Mackerel" and "Fish Tuna" by Quaternius (public domain, CC0) and
+        "Sperm Whale", "Orca", "Turtle", "Sea lion", "Flying seagull" and "Flying gull" by Poly by Google (CC-BY 3.0),
+        all via Poly Pizza; 3D graphics with three.js (MIT);
+        ragdoll physics with cannon-es (MIT); Bikini Atoll outline © OpenStreetMap contributors (ODbL).</p>
+      <div class="cardButtons"><span style="flex:1"></span><button class="primary" data-close="aboutModal">Got it</button></div>
     </div>
   </div>
 

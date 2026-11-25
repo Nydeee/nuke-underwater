@@ -2,6 +2,8 @@
 
 import math
 
+import numpy as np
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -117,7 +119,7 @@ def test_timeline_effect_levels_match_assess():
 def test_bubble_reaches_cole_maximum_at_rayleigh_time():
     b, env = Burst(yield_kt=100, z_m=-300), Environment()
     bub = tl._bubble(b, env, [])
-    assert not bub["vents"]
+    assert not bub["vents"] or bub["vent_s"] > bub["cycles"][0]["period_s"]   # (it may vent later, after rising)
     assert max(bub["radius_m"]) == pytest.approx(tl.bubble_max_radius_m(100, 300), rel=1e-4)
     t_peak = bub["t_s"][int(max(range(len(bub["radius_m"])), key=lambda i: bub["radius_m"][i]))]
     p = env.hydrostatic_pressure_pa(300)
@@ -131,3 +133,21 @@ def test_shallow_bubble_vents_and_air_burst_has_none():
     assert bub["radius_m"][-1] == pytest.approx(27)
     assert any(e["label"] == "gas bubble reaches the surface" for e in j["events"])
     assert post({"yield_kt": 15, "z_m": 580})["bubble"] is None
+
+
+def test_deep_bubble_pulses_and_rises():
+    b, env = Burst(30, -610), Environment()   # WIGWAM: 30 kt at 2,000 ft
+    bub = tl._bubble(b, env, [])
+    assert not bub["vents"]
+    assert len(bub["cycles"]) == 3 and len(bub["pulses_s"]) == 2
+    periods = [c["period_s"] for c in bub["cycles"]]
+    assert periods[1] / periods[0] == pytest.approx(0.91) and periods[2] / periods[0] == pytest.approx(0.66)
+    radii = [c["max_radius_m"] for c in bub["cycles"]]
+    assert radii[1] < radii[0] and radii[2] < radii[1]
+    assert bub["centre_z_m"][-1] > bub["centre_z_m"][0]              # it rises
+    assert bub["centre_z_m"][len(bub["centre_z_m"]) // 6] == pytest.approx(-610)   # not before the first maximum
+    # first maximum still at Rayleigh's time and Cole's radius
+    k = int(np.argmax(bub["radius_m"]))
+    assert bub["radius_m"][k] == pytest.approx(tl.bubble_max_radius_m(30, 610), rel=1e-3)
+    # WIGWAM's measured first period was 2.87 s (Snay 1957); our Cole/Rayleigh estimate should be in that region
+    assert 1.5 < bub["cycles"][0]["period_s"] < 5
