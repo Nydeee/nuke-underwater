@@ -10,7 +10,13 @@
   <meta property="og:description" content="Pick a nuclear bomb and a spot in the sea, then watch what the science says happens to the fish, whales, divers and ships in and on the water.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://whatifanukeexplodedunderwater.com/">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://whatifanukeexplodedunderwater.com/og-image.jpg">
+  <meta property="og:image:width" content="800">
+  <meta property="og:image:height" content="420">
+  <meta property="og:image:alt" content="A mushroom cloud rising over the open sea, with the title What if a nuke exploded underwater">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="theme-color" content="#f4f7fb">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
@@ -47,8 +53,8 @@
       <button data-detail="basic" class="classicOnly" title="The older Basic level: the full panels with plain labels">Basic</button>
       <button data-detail="expert" title="Every number, criterion, source, uncertainty setting and caveat (X switches)">Expert</button>
     </div>
-    <button id="muteBtn" class="tb icon" title="Sound on / off (M)">🔊</button>
-    <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset">⚙</button>
+    <button id="muteBtn" class="tb icon" title="Sound on / off (M)" aria-label="Sound on or off">🔊</button>
+    <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset" aria-label="Settings">⚙</button>
     <button id="helpBtn" class="tb" title="Help, tour and keyboard shortcuts">? <span class="tbl">Help</span> ▾</button>
   </header>
 
@@ -166,6 +172,7 @@
     <details>
       <summary>How far the danger reaches</summary>
       <label class="check small"><input id="showZones" type="checkbox"> Draw the danger circles on the sea (realistic view)</label>
+      <label class="check small"><input id="calm" type="checkbox"> Gentler flash and no screen shake (on by itself if your device asks for reduced motion)</label>
       <div id="zonesBox"></div>
     </details>
     <details class="expert" id="viewNotesBox">
@@ -268,7 +275,8 @@
       <p class="help">Switch to <b>Expert</b> (top right) to see every number, its source and its limits.</p>
       <p class="help">Credits: people model "Animated Human" by Quaternius (public domain, CC0); animal models
         "Fish", "Shark", "Dolphin", "Whale", "Fish Mackerel" and "Fish Tuna" by Quaternius (public domain, CC0) and
-        "Sperm Whale", "Orca", "Turtle", "Sea lion", "Flying seagull" and "Flying gull" by Poly by Google (CC-BY 3.0),
+        "Sperm Whale", "Orca", "Turtle", "Sea lion", "Flying seagull" and "Flying gull" by Poly by Google (CC-BY 3.0);
+        ship models "Boat" by Poly by Google (CC-BY 3.0) and "low poly battleship" by angelo raffaele Catalano (CC-BY 3.0),
         all via Poly Pizza; 3D graphics with three.js (MIT);
         ragdoll physics with cannon-es (MIT); Bikini Atoll outline © OpenStreetMap contributors (ODbL).</p>
       <div class="cardButtons"><span style="flex:1"></span><button class="primary" data-close="aboutModal">Got it</button></div>

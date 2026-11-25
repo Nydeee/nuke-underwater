@@ -6,6 +6,7 @@
 // killed (belly up, drifting up slowly: illustrative).
 
 import * as THREE from "three";
+import { speciesGeometry } from "./animals.js";
 
 const LV = ["none", "possible", "likely", "severe", "lethal"];
 
@@ -25,10 +26,26 @@ function fishGeometry() {
 }
 
 export function createSchools(scene) {
-  const PER = 140, N_SCHOOLS = 7, N = PER * N_SCHOOLS;
-  const mesh = new THREE.InstancedMesh(fishGeometry(), new THREE.MeshStandardMaterial({ color: 0xb8c6d2, roughness: 0.35, metalness: 0.4 }), N);
+  // fewer fish on phones and tablets (touch screens): each fish is a few hundred triangles
+  const small = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  const PER = small ? 60 : 140, N_SCHOOLS = 7, N = PER * N_SCHOOLS;
+  // the sardine model when it is loaded (else a simple shape), with a tail that waves while the fish swims
+  const art = speciesGeometry("sardine"), geo = art || fishGeometry();
+  const wag = new THREE.InstancedBufferAttribute(new Float32Array(N).fill(1), 1);
+  geo.setAttribute("aWag", wag);
+  const mat = new THREE.MeshStandardMaterial({ color: art ? 0xffffff : 0xb8c6d2, vertexColors: !!art, roughness: 0.35, metalness: art ? 0.25 : 0.4 });
+  const uTime = { value: 0 };
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = "uniform float uTime;\nattribute float aWag;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+      float phase = instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 0.9;
+      float k = max(0.0, 0.3 - position.x);
+      transformed.z += aWag * 0.12 * k * k * sin(uTime * 9.0 + phase - position.x * 5.0);`);
+  };
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.frustumCulled = false;
   mesh.visible = false;
+  mesh.layers.set(1);   // seen by the camera only: not drawn again into the sea surface's reflection
   scene.add(mesh);
   const rnd = new Float32Array(N * 4).map(() => Math.random());
   let layout = null;     // [{ x, z, depth, arrive, level }] per school
@@ -63,6 +80,7 @@ export function createSchools(scene) {
     mesh.visible = !!(on && layout);
     if (!mesh.visible) return;
     let k = 0;
+    uTime.value = now / 1000;
     for (const [si, sc] of layout.entries()) {
       const hit = t >= sc.arrive, dt = t - sc.arrive;
       for (let j = 0; j < PER; j++, k++) {
@@ -79,6 +97,7 @@ export function createSchools(scene) {
           if (lv >= 4) p.y += Math.min(sc.depth - 0.3, Math.max(0, dt - 5) * 0.02 * (0.5 + d));   // dead fish drift up (illustrative)
           if (dt < 1) p.x += (sc.x / sc.r) * (1 - dt) * 0.8 * lv, p.z += (sc.z / sc.r) * (1 - dt) * 0.8 * lv;   // a shove outwards
         }
+        wag.array[k] = hit && sc.level >= 2 ? 0 : 1;                              // hurt fish stop swimming
         e.set(roll, yaw, pitch, "YXZ"); q.setFromEuler(e);
         s.setScalar(0.25 + 0.15 * d);
         m4.compose(p, q, s);
@@ -86,6 +105,7 @@ export function createSchools(scene) {
       }
     }
     mesh.instanceMatrix.needsUpdate = true;
+    wag.needsUpdate = true;
   }
   /** Where a school is (for the camera): the one nearest the edge of the "killed" zone by default. */
   function spot(i = 2) { const s = layout?.[i]; return s ? { x: s.x, y: -s.depth, z: s.z, r: s.r } : null; }

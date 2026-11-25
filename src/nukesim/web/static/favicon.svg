@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- the site icon: a burst glowing just under the sea surface -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="58%" r="45%">
+      <stop offset="0" stop-color="#fff6d8"/>
+      <stop offset="0.35" stop-color="#ffb347"/>
+      <stop offset="1" stop-color="#ff5a3a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f7fa8"/>
+      <stop offset="1" stop-color="#0b2a44"/>
+    </linearGradient>
+    <clipPath id="round"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="64" height="64" fill="#cfe3f2"/>
+    <rect y="30" width="64" height="34" fill="url(#sea)"/>
+    <circle cx="32" cy="38" r="22" fill="url(#glow)"/>
+    <path d="M0 31 Q8 27 16 31 T32 31 T48 31 T64 31" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+  </g>
+</svg>

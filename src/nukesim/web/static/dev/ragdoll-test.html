@@ -1,0 +1,99 @@
+<!doctype html><html><head><base href="/"><script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/","cannon-es":"./vendor/cannon-es/cannon-es.js"}}</script></head>
+<!-- Ragdoll test harness (developer tool): open /dev/ragdoll-test.html, then in the console run
+     summary(sweep()) for the worst joint separation, cone/twist overshoot, knees/elbows bent the wrong
+     way, and spin over 30 thrown people; film(10, "stand", 1) shows one throw as a time-lapse. -->
+<body style="margin:0;background:#234"><canvas id=c width=800 height=600></canvas><pre id=o style="color:#fff"></pre><script type=module>
+import * as THREE from "three"; import { loadHumans, createHuman } from "./humans.js"; import { createRagdolls, RAG } from "./ragdoll.js"; window.RAG = RAG;
+await loadHumans();
+const V = THREE.Vector3, w = (b) => b.getWorldPosition(new V());
+// one run: a person (1.8 m), standing on a deck or swimming underwater, pushed at speed v (m/s), 6 s of physics
+export function run(v, pose = "stand", seed = 1, keepScene = null) {
+  let rs = seed; Math.random = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };   // repeatable
+  const scene = keepScene || new THREE.Scene();
+  const rag = createRagdolls(scene);
+  const p = createHuman({ pose, outfit: "deck" });
+  p.group.scale.setScalar(1.8); p.group.position.set(0, pose === "stand" ? 0 : -10, 0);
+  scene.add(p.group); p.mixer.update(0); p.group.updateMatrixWorld(true);
+  const deck = pose === "stand" ? { pos: new V(0, -0.1, 0), quat: new THREE.Quaternion(), half: new V(4, 0.1, 2) } : null;
+  const dir = new V(1, pose === "stand" ? 0.3 : 0, 0.2).normalize().multiplyScalar(v);
+  rag.spawnRig("p", p, dir, deck);
+  const d = rag.debug.dolls.get("p"), b = p.bones;
+  // the way the body faces, carried by the hips, for "bent the wrong way" checks
+  const hipsQ0 = b.Hips.getWorldQuaternion(new THREE.Quaternion());
+  const front0 = new V(1, 0, 0).applyQuaternion(p.holder.getWorldQuaternion(new THREE.Quaternion())).normalize();
+  const frontLocal = front0.clone().applyQuaternion(hipsQ0.clone().invert());
+  const m = { twistOver: 0, sep: 0, sepJoint: "", hyperKnee: 0, hyperElbow: 0, coneOver: 0, coneJoint: "", maxW: 0, maxV: 0, nan: false, endKE: 0, neck: 0 };
+  const lim = d.constraints.map((c) => c.angle ?? c.coneEquation?.angle);
+  const signedBend = (a, mid, e, ref) => {   // angle of the lower segment past the upper one's line, toward ref (+) or away (-)
+    const u = mid.clone().sub(a).normalize(), l = e.clone().sub(mid).normalize();
+    const r = ref.clone().sub(u.clone().multiplyScalar(ref.dot(u))).normalize();
+    return Math.atan2(l.dot(r), l.dot(u));
+  };
+  for (let f = 0; f < 360; f++) {
+    rag.step(1 / 60);
+    d.constraints.forEach((c, i) => {
+      const pa = c.bodyA.pointToWorldFrame(c.pivotA), pb = c.bodyB.pointToWorldFrame(c.pivotB), s = pa.distanceTo(pb);
+      if (s > m.sep) { m.sep = s; m.sepJoint = i; }
+      const xa = c.bodyA.vectorToWorldFrame(c.axisA), xb = c.bodyB.vectorToWorldFrame(c.axisB);
+      const ang = Math.acos(Math.min(1, Math.max(-1, xa.dot(xb) / (xa.length() * xb.length()))));
+      if (lim[i] != null && ang - lim[i] > m.coneOver) { m.coneOver = ang - lim[i]; m.coneJoint = i; }
+      if (c.twistAngle != null && c.twistAngle < Math.PI) { const t = c.twistEquation; const tw = Math.acos(Math.min(1, Math.max(-1, t.axisA.dot(t.axisB) / (t.axisA.length() * t.axisB.length())))); m.twistOver = Math.max(m.twistOver, tw - c.twistAngle); }
+    });
+    for (const bd of d.bodies) {
+      const wv = bd.angularVelocity.length(), lv = bd.velocity.length();
+      if (!isFinite(wv) || !isFinite(lv)) m.nan = true;
+      m.maxW = Math.max(m.maxW, wv); m.maxV = Math.max(m.maxV, lv);
+    }
+    const front = frontLocal.clone().applyQuaternion(b.Hips.getWorldQuaternion(new THREE.Quaternion()));
+    // bend about each joint's own axis (the lower bone's x axis); natural bending is negative (checked by eye),
+    // so a positive angle = bent the wrong way (hyperextended)
+    const about = (a, mid, e, bone) => { const u = mid.clone().sub(a).normalize(), l = e.clone().sub(mid).normalize();
+      const ax = new V(1, 0, 0).applyQuaternion(bone.getWorldQuaternion(new THREE.Quaternion()));
+      return Math.atan2(new V().crossVectors(u, l).dot(ax), u.dot(l)); };
+    for (const s of ["Left", "Right"]) {
+      m.hyperKnee = Math.max(m.hyperKnee, about(w(b[s + "UpLeg"]), w(b[s + "Leg"]), w(b[s + "Foot"]), b[s + "Leg"]));
+      m.hyperElbow = Math.max(m.hyperElbow, about(w(b[s + "Arm"]), w(b[s + "ForeArm"]), w(b[s + "Hand"]), b[s + "ForeArm"]));
+    }
+    // head bent from the spine line
+    m.neck = Math.max(m.neck, Math.abs(signedBend(w(b.Spine1), w(b.Neck), w(b.HeadTop_End), front)));
+  }
+  m.endKE = d.bodies.reduce((a, bd) => a + 0.5 * bd.mass * bd.velocity.lengthSquared(), 0);
+  const deg = (x) => Math.round(x * 180 / Math.PI);
+  const out = { v, pose, seed, sepCm: +(m.sep * 100).toFixed(1), sepJoint: m.sepJoint, twistOverDeg: deg(m.twistOver), coneOverDeg: deg(m.coneOver), coneJoint: m.coneJoint,
+    hyperKneeDeg: deg(m.hyperKnee), hyperElbowDeg: deg(m.hyperElbow), neckDeg: deg(m.neck), maxW: +m.maxW.toFixed(1), maxV: +m.maxV.toFixed(1), nan: m.nan, endKE: Math.round(m.endKE) };
+  if (!keepScene) rag.clearAll();
+  return keepScene ? { out, p, rag } : out;
+}
+window.run = run;
+window.summary = (res) => { const g = {}; for (const r of res) { const k = r.pose; g[k] = g[k] || { twistOverDeg: 0, sepCm: 0, coneOverDeg: 0, hyperKneeDeg: -99, hyperElbowDeg: -99, neckDeg: 0, maxW: 0, nan: false };
+  for (const f of ["twistOverDeg", "sepCm", "coneOverDeg", "hyperKneeDeg", "hyperElbowDeg", "neckDeg", "maxW"]) g[k][f] = Math.max(g[k][f], r[f]); g[k].nan ||= r.nan; } return g; };
+window.sweep = () => { const res = []; for (const pose of ["stand", "swim"]) for (const v of [2, 5, 10, 20, 40]) for (const seed of [1, 2, 3]) res.push(run(v, pose, seed)); return res; };
+// draw one: a run left in a scene, shown from 3 sides
+window.show = (v, pose, seed) => {
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2b4a66);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2)); const L = new THREE.DirectionalLight(0xffffff, 2); L.position.set(3, 5, 4); scene.add(L);
+  const { out, p } = run(v, pose, seed, scene);
+  const c = w(p.bones.Hips), r = new THREE.WebGLRenderer({ canvas: document.getElementById("c"), antialias: true, preserveDrawingBuffer: true }); r.setScissorTest(true);
+  [[0, 1, 4], [4, 1, 0], [0, 5, 0.01]].forEach((o, i) => { const k = new THREE.PerspectiveCamera(40, 1, 0.05, 100); k.position.copy(c).add(new V(...o)); k.lookAt(c); r.setViewport(i * 400, 0, 400, 400); r.setScissor(i * 400, 0, 400, 400); r.render(scene, k); });
+  return out;
+};
+// time-lapse: the same throw at several moments, side by side
+window.film = (v, pose, seed, frames = [0, 15, 30, 60, 120, 300]) => {
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2b4a66);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2)); const L = new THREE.DirectionalLight(0xffffff, 2); L.position.set(3, 5, 4); scene.add(L);
+  const r = new THREE.WebGLRenderer({ canvas: document.getElementById("c"), antialias: true, preserveDrawingBuffer: true }); r.setScissorTest(true);
+  const shots = [];
+  let rs = seed; Math.random = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
+  const rag = createRagdolls(scene); const p = createHuman({ pose }); p.group.scale.setScalar(1.8); p.group.position.y = pose === "stand" ? 0 : -10; scene.add(p.group); p.mixer.update(0); p.group.updateMatrixWorld(true);
+  rag.spawnRig("p", p, new V(1, pose === "stand" ? 0.3 : 0, 0.2).normalize().multiplyScalar(v), pose === "stand" ? { pos: new V(0, -0.1, 0), quat: new THREE.Quaternion(), half: new V(4, 0.1, 2) } : null);
+  if (pose === "stand") { const deck = new THREE.Mesh(new THREE.BoxGeometry(8, 0.2, 4), new THREE.MeshStandardMaterial({ color: 0x8a7a66 })); deck.position.y = -0.1; scene.add(deck); }
+  let f = 0, i = 0;
+  for (const target of frames) {
+    while (f < target) { rag.step(1 / 60); f++; }
+    const c = w(p.bones.Hips), k = new THREE.PerspectiveCamera(40, 266 / 300, 0.05, 100); k.position.copy(c).add(new V(0.3, 0.8, 2.6)); k.lookAt(c);
+    const x = (i % 3) * 266, y = i < 3 ? 300 : 0; r.setViewport(x, y, 266, 300); r.setScissor(x, y, 266, 300); r.render(scene, k); i++;
+  }
+  return "ok";
+};
+document.title = "ready";
+</script></body></html>

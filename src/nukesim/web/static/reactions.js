@@ -36,9 +36,14 @@ export function pose(model, rt, t, { on = true, scale = 1, awayX = 1, canFloat =
   for (const m of mats) { if (m.userData.orig == null) m.userData.orig = m.color.clone(); m.color.copy(m.userData.orig); }
   if (!on || !rt || rt.error) return;
 
-  // worst injury that has happened so far
+  // worst injury that has happened so far (for a ship: only the damage to the ship itself, not to its crew)
+  const ship = !!model.userData.ship;
   let worst = -1;
-  for (const e of rt.effects || []) if (e.onset_s != null && e.onset_s <= t) worst = Math.max(worst, LEVELS.indexOf(e.level));
+  for (const e of rt.effects || []) {
+    if (ship && !e.name.startsWith("ship damage")) continue;
+    if (e.onset_s != null && e.onset_s <= t) worst = Math.max(worst, LEVELS.indexOf(e.level));
+  }
+  if (ship) { shipPose(model, rt, t, worst); return; }
 
   // 1. a jolt as the pressure pulse passes (bigger for worse injuries)
   const p = rt.pulse;
@@ -75,3 +80,19 @@ export function pose(model, rt, t, { on = true, scale = 1, awayX = 1, canFloat =
     for (const m of mats) m.color.lerp(BURN, f);
   }
 }
+
+/** A ship: a short jolt when the shock arrives; a disabled ship takes on a slight list; a wrecked one
+ *  heels over and settles low in the water over a few minutes. Drawing only: the damage level comes
+ *  from the TM 23-200 criteria; how a ship lists or sinks is not modelled. */
+function shipPose(model, rt, t, worst) {
+  const p = rt.pulse;
+  if (!p || t < p.arrival_s || worst < 1) return;
+  const dt = t - p.arrival_s, k = Math.exp(-dt / 0.4);
+  model.rotation.z += 0.03 * k * Math.sin(dt * 18);                        // the hull shudders
+  if (worst === 2) model.rotation.x += smooth(1, 40, dt) * 0.1;              // disabled: a slight list
+  if (worst >= 3) {                                                          // wrecked or sunk
+    model.rotation.x += smooth(1, 60, dt) * 0.4;
+    model.position.y -= smooth(5, 240, dt) * 0.12 * model.scale.y;
+  }
+}
+

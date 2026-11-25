@@ -10,3 +10,5 @@ docs
 tests
 scripts
 .claude
+# developer tools (the ragdoll test page) are not part of the public site
+src/nukesim/web/static/dev

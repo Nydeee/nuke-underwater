@@ -128,7 +128,7 @@ function pinTexture(emoji, ring, selected = false) {
 }
 
 // ---------------------------------------------------------------- the view
-export function initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo, colorOf = (r) => levelColor(state.results[r.id]), reactionsOn = () => true, sound = null, waveGain = () => 1, getZones = () => null, schoolsOn = () => true }) {
+export function initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo, colorOf = (r) => levelColor(state.results[r.id]), reactionsOn = () => true, sound = null, calm = () => false, waveGain = () => 1, getZones = () => null, schoolsOn = () => true }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 3e6);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -407,6 +407,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
         o.material.needsUpdate = true;
       }
     }
+    for (const o of zoneGroup.children) if (o.userData.zoneLabel) o.visible = innerWidth >= 700;   // too cluttered on a phone
     const tl = timeline.getData(), tNow = timeline.getTime();
     const byId = Object.fromEntries((tl?.receivers || []).map((x) => [x.id, x]));
     for (const m of recGroup.children) {
@@ -475,9 +476,11 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       fireLight.intensity = 0;
     } else { fireball.visible = glow.visible = false; fireLight.intensity = 0; }
     if (!(bz >= 0 && fb && t > 0 && t < fb.end_s)) glare.visible = false;
-    renderer.toneMappingExposure = (under ? 0.9 : look.exposure) * (1 + 1.6 * flash);
+    // "calm" (a setting, or the device asking for reduced motion): a much softer flash, for people sensitive to it
+    const soft = calm();
+    renderer.toneMappingExposure = (under ? 0.9 : look.exposure) * (1 + (soft ? 0.35 : 1.6) * flash);
     // the screen whites out for an instant at the flash (much stronger at night, when the eye is dark-adapted)
-    flashDiv.style.opacity = under ? 0 : Math.min(0.92, Math.pow(flash, 2) * (night ? 1.1 : 0.7));
+    flashDiv.style.opacity = under ? 0 : Math.min(soft ? 0.12 : 0.92, Math.pow(flash, 2) * (night ? 1.1 : 0.7));
 
     // --- blast front
     const ab = data && data.air_blast;
@@ -553,25 +556,26 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     // --- sound and shaking, timed by the physics: when the blast front (or the shock in the water, or the
     //     biggest wave) actually reaches the camera
     const tPrev = lastSimT; lastSimT = t;
-    if (t < tPrev) heard.clear();                                   // scrubbed back: things can be heard again
+    if (t < tPrev) heard.clear();                                   // went back in time: things can be heard again
+    // Only make a sound when time runs forward by itself (playing, or the film). While the user drags the
+    // slider, anything that has already arrived is marked as heard silently, so it does not go off on release.
+    const audible = t > tPrev && !timeline.movedByHand?.();
+    const hear = (key, play) => { if (heard.has(key)) return; heard.add(key); if (audible) play(); };
     const cam = camera.position, dBurst = Math.hypot(cam.x, cam.y - bz, cam.z);
     if (data && t > 0) {
       if (!under && ab && bz >= 0) {
         const slant = interpLogT(ab.t_s, ab.slant_radius_m, t);
-        if (slant >= dBurst && !heard.has("boom")) {
-          heard.add("boom");
+        if (slant >= dBurst) hear("boom", () => {
           const pk = interpLogT(ab.t_s, ab.peak_kpa, Math.min(t, ab.t_s[ab.t_s.length - 1]));   // kPa at the front now
           const st = Math.min(1, Math.max(0, Math.log10(Math.max(pk, 0.05) / 0.05) / Math.log10(400 / 0.05)));
           sound?.boom(st); shake(st);
-        }
+        });
       }
       const ws = data.water_shock;
-      if (under && ws && !heard.has("thud") && ws.speed_m_s * t >= Math.hypot(cam.x, cam.y - (ws.source_z_m ?? bz), cam.z)) {
-        heard.add("thud"); sound?.boom(0.6, true); shake(0.5);
-      }
-      if (wv && !heard.has("wave") && Math.abs(cam.y) < 80) {
+      if (under && ws && ws.speed_m_s * t >= Math.hypot(cam.x, cam.y - (ws.source_z_m ?? bz), cam.z)) hear("thud", () => { sound?.boom(0.6, true); shake(0.5); });
+      if (wv && Math.abs(cam.y) < 80) {
         const rMax = wv.max_wave_speed_m_s * t, dh = Math.hypot(cam.x, cam.z);
-        if (rMax >= dh && tPrev * wv.max_wave_speed_m_s < dh) { heard.add("wave"); sound?.wash(0.5); }
+        if (rMax >= dh) hear("wave", () => { if (tPrev * wv.max_wave_speed_m_s < dh) sound?.wash(0.5); });
       }
     }
     // shake the camera for a moment after the blast reaches it
@@ -623,7 +627,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
 
   const shakeOff = new THREE.Vector3(), heard = new Set();
   let shakeAt = -1e9, shakeAmp = 0, lastSimT = 0;
-  function shake(strength) { shakeAt = performance.now(); shakeAmp = 2 + 10 * strength; }
+  function shake(strength) { if (calm()) return; shakeAt = performance.now(); shakeAmp = 2 + 10 * strength; }
 
   function updateCloud(t, y, bz, data, fb) {
     const show = (on) => { cloud.visible = on; };
@@ -845,6 +849,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       const a = -0.5 - i * 0.35;   // spread the labels around so they do not overlap
       const lab = labelSprite(z.text, z.color);
       lab.position.set(Math.cos(a) * z.r, 8, Math.sin(a) * z.r);
+      lab.userData.zoneLabel = true;
       zoneGroup.add(lab);
     }
   }

@@ -14,7 +14,12 @@ import { createSound } from "./sound.js";
 import { loadHumans, tickHumans } from "./humans.js";
 import { loadAnimals, tickAnimals } from "./animals.js";
 
-await Promise.all([loadHumans(), loadAnimals()]);   // the rigged people and the animal models (about 2 MB) before anything is built
+// The rigged people and the artist-made animals and ships (about 2 MB) load in the background, so the page
+// appears at once; until they arrive the simple code-built models are used, then everything is rebuilt.
+const modelsReady = Promise.all([loadHumans(), loadAnimals()]).then(() => {
+  buildReceivers();
+  realistic?.rebuildReceivers();
+});
 import { fmtTime } from "./timeline.js";
 import { SPECIES, speciesOf, speciesIn, GROUPS } from "./species.js";
 import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
@@ -228,6 +233,7 @@ function receiverMesh(r) {
 function buildReceivers() {
   clearGroup(receiverGroup);
   state.receivers.forEach((r) => receiverGroup.add(receiverMesh(r)));
+  if (state.zones) renderZones();   // the rings drawn depend on what is in the sea
 }
 
 // technical-view camera presets (scene units: km)
@@ -551,7 +557,10 @@ async function loadZones() {
 function zoneRings() {
   if (!state.zones) return [];
   const by = Object.fromEntries(state.zones.map((z) => [z.key, z]));
-  return ZONE_RINGS.map(([k, lvl, color, text]) => {
+  // only for what is actually in the sea (no "ships wrecked" ring when there are no ships)
+  const kinds = new Set(state.receivers.map((r) => r.kind));
+  const present = { fish_bladder: kinds.has("fish"), whale: kinds.has("mammal"), person: kinds.has("person") || kinds.has("ship"), destroyer: kinds.has("ship") };
+  return ZONE_RINGS.filter(([k]) => present[k] ?? true).map(([k, lvl, color, text]) => {
     const r = by[k]?.farthest_m?.[lvl];
     return r ? { r, color, text: `${text} within ${fmtLen(r)}` } : null;
   }).filter(Boolean);
@@ -733,7 +742,8 @@ function setStatus(text, busy = false) {
 // ---------------------------------------------------------------- preferences (this browser only)
 const firstVisit = !store.get("prefs", null);
 const smallScreen = window.matchMedia("(max-width: 700px), (pointer: coarse)").matches;
-const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "simple", reactions: true, followTL: true, classicBasic: false, bigWaves: false, zones: false, schools: true },
+const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "simple", reactions: true, followTL: true, classicBasic: false, bigWaves: false, zones: false, schools: true,
+  calm: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches },
   store.get("prefs", {}));
 const savePrefs = () => store.set("prefs", prefs);
 if (firstVisit && smallScreen) {   // phones and tablets: lighter graphics, more room for the 3D view
@@ -1144,6 +1154,7 @@ $("classicBasic").addEventListener("change", (e) => {
 });
 $("schools").addEventListener("change", (e) => { prefs.schools = e.target.checked; savePrefs(); });
 $("showZones").addEventListener("change", (e) => { prefs.zones = e.target.checked; savePrefs(); renderZones(); });
+$("calm").addEventListener("change", (e) => { prefs.calm = e.target.checked; savePrefs(); });
 $("bigWaves").addEventListener("change", (e) => { prefs.bigWaves = e.target.checked; savePrefs(); toast(e.target.checked ? "Waves drawn 10x taller than they really are" : "Waves drawn at their true height"); });
 $("reactions").addEventListener("change", (e) => { prefs.reactions = e.target.checked; savePrefs(); });
 $("followTL").addEventListener("change", (e) => { prefs.followTL = e.target.checked; savePrefs(); state.followTimeline = e.target.checked; lastStatusKey = null; });
@@ -1239,14 +1250,14 @@ layoutPanels();
 applyQuality(prefs.quality);
 document.querySelectorAll("#qualitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.quality === prefs.quality));
 $("classicBasic").checked = prefs.classicBasic; document.body.classList.toggle("classic", prefs.classicBasic);
-$("autoPlay").checked = prefs.autoPlay; $("bigWaves").checked = prefs.bigWaves; $("showZones").checked = prefs.zones; $("schools").checked = prefs.schools; $("reactions").checked = prefs.reactions; $("followTL").checked = prefs.followTL; state.followTimeline = prefs.followTL; $("showPins").checked = prefs.pins;
+$("autoPlay").checked = prefs.autoPlay; $("bigWaves").checked = prefs.bigWaves; $("showZones").checked = prefs.zones; $("calm").checked = prefs.calm; $("schools").checked = prefs.schools; $("reactions").checked = prefs.reactions; $("followTL").checked = prefs.followTL; state.followTimeline = prefs.followTL; $("showPins").checked = prefs.pins;
 writeInput($("wind"), 15);            // canonical wind is 15 mph, shown in the chosen units
 if (prefs.units !== "metric") applyUnits(prefs.units);
 resize();
 frameCamera();
 // ---------------------------------------------------------------- timeline hook (everything else is in timeline.js)
 timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
-realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info, colorOf, reactionsOn: () => prefs.reactions, sound, waveGain: () => (prefs.bigWaves ? 10 : 1),
+realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info, colorOf, reactionsOn: () => prefs.reactions, sound, calm: () => prefs.calm, waveGain: () => (prefs.bigWaves ? 10 : 1),
   getZones: () => state.zones, schoolsOn: () => prefs.schools });
 realistic.setPins(prefs.pins);
 realistic.setConditions(conditions());

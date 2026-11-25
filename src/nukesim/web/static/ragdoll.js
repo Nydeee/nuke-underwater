@@ -29,30 +29,53 @@ export function pushSpeed(p_kpa, medium) {
 const v3 = (v) => new CANNON.Vec3(v.x, v.y, v.z);
 const q4 = (q) => new CANNON.Quaternion(q.x, q.y, q.z, q.w);
 
+// How the physics is solved, and the limits that keep a body from coming apart or bending the wrong way.
+// Each was checked with a test harness (40 thrown people per setting: push speeds 2-40 m/s, on a deck and
+// under water), measuring how far joints pull apart, how far knees and elbows bend backwards, and spin.
+export const RAG = {
+  step: 1 / 120,        // s, physics time step (smaller is steadier)
+  iterations: 30,       // solver passes per step (more = joints held more firmly)
+  maxSpin: 50,          // rad/s, a safety net only (clamping spin part by part pulls joints apart; in the tests
+                        //   bodies stayed below about 23 rad/s, so this never acts unless something goes wrong)
+  spin0: 3,             // rad/s, the whole body starts tumbling at up to this (all parts together)
+  inertiaFloor: 0.35,   // thin limbs get at least this share of their largest moment of inertia (no whirling)
+  hinges: true,         // knees and elbows bend one way only, like real ones
+  angularDamping: 0.3,  // share of spin lost per second (in air)
+  waterSpinLoss: 0.97,  // spin kept per physics step under water
+};
+
 export function createRagdolls(scene) {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.81, 0) });
   world.broadphase = new CANNON.NaiveBroadphase();
-  world.solver.iterations = 12;
+  world.solver.iterations = RAG.iterations;
   const dolls = new Map();   // id -> { bodies, constraints, sync(), extra: [three objects to remove], statics }
   const GROUP_DOLL = 2, GROUP_STATIC = 1;
 
   // water: bodies under the surface are held up (about neutral) and slowed by drag
   world.addEventListener("preStep", () => {
     for (const d of dolls.values()) for (const b of d.bodies) {
+      const w = b.angularVelocity.length();
+      if (w > RAG.maxSpin) b.angularVelocity.scale(RAG.maxSpin / w, b.angularVelocity);
       const under = b.position.y < 0;
       if (under) {
         // (forces act at the centre of each body: cannon-es takes the point relative to the centre)
         b.applyForce(new CANNON.Vec3(0, b.mass * 9.81 * d.buoy, 0));
         const k = b.mass * 2.5;
         b.applyForce(new CANNON.Vec3(-b.velocity.x * k, -b.velocity.y * k, -b.velocity.z * k));
-        b.angularVelocity.scale(0.97, b.angularVelocity);
+        b.angularVelocity.scale(RAG.waterSpinLoss, b.angularVelocity);
       }
     }
   });
 
   function addBody(shape, mass, pos, quat) {
-    const b = new CANNON.Body({ mass, shape, position: v3(pos), quaternion: q4(quat), linearDamping: 0.05, angularDamping: 0.3,
+    const b = new CANNON.Body({ mass, shape, position: v3(pos), quaternion: q4(quat), linearDamping: 0.05, angularDamping: RAG.angularDamping,
       collisionFilterGroup: GROUP_DOLL, collisionFilterMask: GROUP_STATIC });
+    if (RAG.inertiaFloor > 0) {   // a thin box spins far too easily about its long axis; give it a floor
+      const I = b.inertia, m = Math.max(I.x, I.y, I.z) * RAG.inertiaFloor;
+      I.set(Math.max(I.x, m), Math.max(I.y, m), Math.max(I.z, m));
+      b.invInertia.set(1 / I.x, 1 / I.y, 1 / I.z);
+      b.updateInertiaWorld(true);
+    }
     world.addBody(b);
     return b;
   }
@@ -60,6 +83,33 @@ export function createRagdolls(scene) {
     const pa = a.pointToLocalFrame(v3(pivotWorld)), pb = b.pointToLocalFrame(v3(pivotWorld));
     const ax = v3(axisWorld);
     const c = new CANNON.ConeTwistConstraint(a, b, { pivotA: pa, pivotB: pb, axisA: a.vectorToLocalFrame(ax), axisB: b.vectorToLocalFrame(ax), angle, twistAngle: twist });
+    world.addConstraint(c);
+    return c;
+  }
+
+  // a cone joint whose cone points along axisAWorld (fixed in body a) and holds body b's axisBWorld inside it
+  // Its twist limit is measured from reference directions set at spawn so that they agree then (cannon-es on its
+  // own derives them from each body's arbitrary local frame, so a joint could start "over-twisted" and snap),
+  // with the swing taken out first (the reference on a is turned with the cone, from its axis to b's axis).
+  const _qs = new CANNON.Quaternion(), _ca = new CANNON.Vec3(), _cb = new CANNON.Vec3(), _r = new CANNON.Vec3();
+  function cone(a, b, pivotWorld, axisAWorld, axisBWorld, angle, twist) {
+    const c = new CANNON.ConeTwistConstraint(a, b, { pivotA: a.pointToLocalFrame(v3(pivotWorld)), pivotB: b.pointToLocalFrame(v3(pivotWorld)),
+      axisA: a.vectorToLocalFrame(v3(axisAWorld)), axisB: b.vectorToLocalFrame(v3(axisBWorld)), angle, twistAngle: twist });
+    if (twist < Math.PI) {
+      const cB = axisBWorld.clone().normalize(), cA = axisAWorld.clone().normalize();
+      const helper = Math.abs(cB.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+      const refB = new THREE.Vector3().crossVectors(cB, helper).normalize();                       // across b's axis
+      const refA = refB.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(cB, cA));  // the same, carried back onto a's axis
+      const rA = a.vectorToLocalFrame(v3(refA)), rB = b.vectorToLocalFrame(v3(refB));
+      const base = c.update.bind(c);
+      c.update = () => {
+        base();
+        a.vectorToWorldFrame(c.axisA, _ca); b.vectorToWorldFrame(c.axisB, _cb);
+        _qs.setFromVectors(_ca.unit(_ca), _cb.unit(_cb));
+        a.vectorToWorldFrame(rA, _r); _qs.vmult(_r, c.twistEquation.axisA);
+        b.vectorToWorldFrame(rB, c.twistEquation.axisB);
+      };
+    }
     world.addConstraint(c);
     return c;
   }
@@ -125,13 +175,20 @@ export function createRagdolls(scene) {
     ["LeftUpLeg", "LeftLeg", 0.045, 0.1], ["LeftLeg", "LeftFoot", 0.035, 0.06],
     ["RightUpLeg", "RightLeg", 0.045, 0.1], ["RightLeg", "RightFoot", 0.035, 0.06],
   ];
-  // joints: [parent segment, child segment, the bone where they meet, cone angle, twist]
+  // joints: [parent segment, child segment, the bone where they meet, type, ...]
+  //   "cone", half-angle, twist, [lean toward "front"/"back", by]: the limb may swing within a cone, centred
+  //      on its rest direction leaned that way (hips swing forward much further than back, for example);
+  //   "hinge", from, to, bending toward: knees and elbows turn about one axis only, between the two angles
+  //      (0 = straight). Rough anatomical ranges of motion: knee 0-140 deg (bending backward), elbow 0-145 deg
+  //      (bending forward), hip -20 to 120 deg and about 40 deg of rotation, shoulder well above the head and
+  //      about 60 deg of rotation, neck and spine a little.
+  const D = Math.PI / 180;
   const RIG_JOINTS = [
-    ["Hips", "Spine2", "Spine1", 0.5, 0.3], ["Spine2", "Head", "Neck", 0.6, 0.4],
-    ["Spine2", "LeftArm", "LeftArm", 1.6, 0.6], ["LeftArm", "LeftForeArm", "LeftForeArm", 1.3, 0.2],
-    ["Spine2", "RightArm", "RightArm", 1.6, 0.6], ["RightArm", "RightForeArm", "RightForeArm", 1.3, 0.2],
-    ["Hips", "LeftUpLeg", "LeftUpLeg", 1.1, 0.3], ["LeftUpLeg", "LeftLeg", "LeftLeg", 1.2, 0.1],
-    ["Hips", "RightUpLeg", "RightUpLeg", 1.1, 0.3], ["RightUpLeg", "RightLeg", "RightLeg", 1.2, 0.1],
+    ["Hips", "Spine2", "Spine1", "cone", 30 * D, 15 * D], ["Spine2", "Head", "Neck", "cone", 35 * D, 30 * D],
+    ["Spine2", "LeftArm", "LeftArm", "cone", 80 * D, 60 * D, "front", 25 * D], ["LeftArm", "LeftForeArm", "LeftForeArm", "hinge", -5 * D, 140 * D, "front"],
+    ["Spine2", "RightArm", "RightArm", "cone", 80 * D, 60 * D, "front", 25 * D], ["RightArm", "RightForeArm", "RightForeArm", "hinge", -5 * D, 140 * D, "front"],
+    ["Hips", "LeftUpLeg", "LeftUpLeg", "cone", 65 * D, 40 * D, "front", 50 * D], ["LeftUpLeg", "LeftLeg", "LeftLeg", "hinge", -5 * D, 135 * D, "back"],
+    ["Hips", "RightUpLeg", "RightUpLeg", "cone", 65 * D, 40 * D, "front", 50 * D], ["RightUpLeg", "RightLeg", "RightLeg", "hinge", -5 * D, 135 * D, "back"],
   ];
   /** rig: from humans.createHuman (already placed in the scene). */
   function spawnRig(id, rig, velocity, deck = null, buoy = 1.0) {
@@ -141,6 +198,11 @@ export function createRagdolls(scene) {
     const Hh = wp(rig.bones.HeadTop_End).distanceTo(wp(rig.bones.LeftFoot)) || 1;   // body height in the world
     const bodies = {}, drive = [];
     const up = new THREE.Vector3(0, 1, 0);
+    // the body's own directions: across (left to right), along the spine, and the way it faces
+    // (from the model itself, which faces +z: the hips can be turned in the idle pose)
+    const front = new THREE.Vector3(0, 0, 1).applyQuaternion(rig.inner.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    // one tumble for the whole body (separate random spins for each part make the limbs fight the joints)
+    const spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(RAG.spin0 * Math.random());
     for (const [name, endName, rad, share] of RIG) {
       const a = rig.bones[name], e = rig.bones[endName];
       if (!a || !e) continue;
@@ -148,18 +210,44 @@ export function createRagdolls(scene) {
       const q = new THREE.Quaternion().setFromUnitVectors(up, pe.clone().sub(pa).normalize());
       const body = addBody(new CANNON.Box(new CANNON.Vec3(rad * Hh, len / 2, rad * Hh)), 75 * share, mid, q);
       body.velocity.set(velocity.x, velocity.y, velocity.z);
-      body.angularVelocity.set((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+      body.angularVelocity.set(spin.x, spin.y, spin.z);
       bodies[name] = body;
       // remember how the bone sits relative to its body, to put it back there every frame
       const bq = a.getWorldQuaternion(new THREE.Quaternion());
       drive.push({ bone: a, body, qOff: q.clone().invert().multiply(bq), pOff: pa.clone().sub(mid).applyQuaternion(q.clone().invert()), root: name === "Hips" });
     }
     const constraints = [];
-    for (const [pa, ch, at, ang, tw] of RIG_JOINTS) {
+    // lean a direction d toward "front" or "back" by an angle (about the body's across axis)
+    const lean = (d, toward, by) => {
+      const t = (toward === "back" ? front.clone().negate() : front.clone()), perp = t.sub(d.clone().multiplyScalar(t.dot(d)));
+      if (perp.lengthSq() < 1e-8) return d.clone();
+      return d.clone().multiplyScalar(Math.cos(by)).add(perp.normalize().multiplyScalar(Math.sin(by)));
+    };
+    for (const [pa, ch, at, type, a1, a2, toward, by] of RIG_JOINTS) {
       if (!bodies[pa] || !bodies[ch]) continue;
       const pivot = wp(rig.bones[at]);
-      const axis = wp(rig.bones[RIG.find((r) => r[0] === ch)[1]]).sub(pivot).normalize();
-      constraints.push(join(bodies[pa], bodies[ch], pivot, axis, ang, tw));
+      const childDir = wp(rig.bones[RIG.find((r) => r[0] === ch)[1]]).sub(pivot).normalize();
+      if (type === "hinge" && RAG.hinges) {
+        // a knee or elbow turns about the lower bone's own x axis; turning it the negative way bends the
+        // joint the natural way (checked on the model: knees fold back, elbows fold forward, both sides)
+        const axis = new THREE.Vector3(1, 0, 0).applyQuaternion(rig.bones[ch].getWorldQuaternion(new THREE.Quaternion())).normalize();
+        const upperDir = pivot.clone().sub(wp(rig.bones[pa])).normalize();
+        const bendDir = upperDir.clone().cross(axis).normalize();   // where the lower segment goes as the joint bends
+        // how far it is bent now (the model's own pose may sit a little outside the range: never start outside it)
+        const bent0 = Math.atan2(childDir.dot(bendDir), childDir.dot(upperDir));
+        const lo = Math.min(a1, bent0 - 5 * D), hi = Math.max(a2, bent0 + 5 * D);
+        const mid = (lo + hi) / 2, half = (hi - lo) / 2;
+        const centre = upperDir.clone().multiplyScalar(Math.cos(mid)).add(bendDir.multiplyScalar(Math.sin(mid)));
+        constraints.push(cone(bodies[pa], bodies[ch], pivot, centre, childDir, half, Math.PI));   // the range; the hinge stops twisting
+        const h = new CANNON.HingeConstraint(bodies[pa], bodies[ch], {
+          pivotA: bodies[pa].pointToLocalFrame(v3(pivot)), pivotB: bodies[ch].pointToLocalFrame(v3(pivot)),
+          axisA: bodies[pa].vectorToLocalFrame(v3(axis)), axisB: bodies[ch].vectorToLocalFrame(v3(axis)) });
+        world.addConstraint(h); constraints.push(h);
+      } else if (type === "hinge") {
+        constraints.push(join(bodies[pa], bodies[ch], pivot, childDir, (a2 - a1) / 2, 0.2));
+      } else {
+        constraints.push(cone(bodies[pa], bodies[ch], pivot, toward ? lean(childDir, toward, by) : childDir, childDir, a1, a2));
+      }
     }
     const statics = [];
     if (deck) {
@@ -263,7 +351,7 @@ export function createRagdolls(scene) {
 
   function step(dt) {
     if (!dolls.size || !(dt > 0)) return;
-    world.step(1 / 60, Math.min(dt, 2), 120);
+    world.step(RAG.step, Math.min(dt, 2), Math.ceil(2 / RAG.step));
     for (const d of dolls.values()) d.sync();
   }
   function clearAll() {
@@ -276,5 +364,5 @@ export function createRagdolls(scene) {
     }
     dolls.clear();
   }
-  return { spawnHuman, spawnRig, spawnSpine, spawnRigid, step, clearAll, has: (id) => dolls.has(id), get count() { return dolls.size; } };
+  return { spawnHuman, spawnRig, spawnSpine, spawnRigid, step, clearAll, has: (id) => dolls.has(id), get count() { return dolls.size; }, debug: { dolls, world } };
 }

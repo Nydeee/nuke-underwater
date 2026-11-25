@@ -15,7 +15,8 @@ const Q = "Quaternius (public domain, CC0)";
 const G = "Poly by Google (CC-BY 3.0)";
 export const CREDITS = [
   ["Fish, Shark, Dolphin, Whale, Fish Mackerel, Fish Tuna", Q],
-  ["Sperm Whale, Orca, Turtle, Sea lion, Flying seagull, Flying gull", G],
+  ["Sperm Whale, Orca, Turtle, Sea lion, Flying seagull, Flying gull, Boat (the fishing boat)", G],
+  ["low poly battleship (the destroyer)", "angelo raffaele Catalano (CC-BY 3.0)"],
 ];
 
 // fwd: which way the head points in the file; wag: how the body bends when there is no animation
@@ -33,6 +34,9 @@ const DEFS = {
   sealion:   { file: "sealion.glb", fwd: "+z", wag: "fluke", tilt: -1.05 },   // sits up in the file; laid down to swim
   gull:      { file: "gull.glb", fwd: "+x", wag: "flap", side: true },
   gull_dark: { file: "gull_dark.glb", fwd: "+x", wag: "flap", side: true },
+  // ships: no movement of their own; draft = how deep the hull sits, as a fraction of its length
+  trawler:   { file: "trawler.glb", fwd: "+x", wag: "none", draft: 0.07 },
+  warship:   { file: "warship.glb", fwd: "+z", wag: "none", draft: 0.03 },
 };
 
 // species -> [model, colour changes by material name, wag strength]
@@ -55,6 +59,8 @@ const SPECIES = {
   gull:        ["gull"],
   tern:        ["gull", { "*": 0xf4f6f8 }],
   frigatebird: ["gull_dark", { "*": 0x3a3d44 }],
+  fishingboat: ["trawler"],
+  destroyer:   ["warship"],
 };
 
 const loaded = {};
@@ -93,6 +99,7 @@ export function createAnimal(key) {
   const s = 1 / size.x;
   holder.scale.setScalar(s);
   holder.position.copy(c).multiplyScalar(-s);
+  if (def.draft != null) holder.position.y += size.y * s / 2 - def.draft;   // a ship: waterline at y = 0
   g.updateMatrixWorld(true);
 
   // own copies of the materials (so injuries can tint one animal), with the species' colours
@@ -116,6 +123,7 @@ export function createAnimal(key) {
   });
 
   const a = { g, base, def, phase: Math.random() * 10, frozen: false, mixer: null, bent: [] };
+  if (def.wag === "none") return { g, bodyMats: [...mats.values()], h: size.y * s };   // stays as it is
   if (skinned && clip) {
     a.mixer = new THREE.AnimationMixer(inner);
     const act = a.mixer.clipAction(clip);
@@ -203,3 +211,34 @@ export function tickAnimals(dt, now) {
     }
   }
 }
+
+/** One plain shape of a species (its parts merged, coloured per vertex from their materials), 1 unit long
+ *  along x, head at +x. For drawing many of them at once (schools of fish). Null if not loaded. */
+export function speciesGeometry(key) {
+  const a = createAnimal(key);
+  if (!a) return null;
+  bakeAnimal(a.g);
+  a.g.updateMatrixWorld(true);
+  const pos = [], nor = [], col = [], c = new THREE.Color(), v = new THREE.Vector3();
+  for (const m of a.g.children) {
+    if (!m.isMesh || !m.userData.spine) continue;
+    const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+    if (!g.attributes.normal) g.computeVertexNormals();
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    const groups = g.groups.length ? g.groups : [{ start: 0, count: g.attributes.position.count, materialIndex: 0 }];
+    for (const gr of groups) {
+      c.copy(mats[gr.materialIndex ?? 0]?.color || c.set(0xb8c6d2));
+      for (let i = gr.start; i < gr.start + gr.count; i++) {
+        v.fromBufferAttribute(g.attributes.position, i).applyMatrix4(m.matrix); pos.push(v.x, v.y, v.z);
+        v.fromBufferAttribute(g.attributes.normal, i).transformDirection(m.matrix); nor.push(v.x, v.y, v.z);
+        col.push(c.r, c.g, c.b);
+      }
+    }
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+

@@ -53,6 +53,16 @@ export function reason(e, kind) {
 }
 
 // short facts shown while the countdown runs (each from the sources used in the simulator, or well-documented history)
+/** A height compared with Mount Everest (8,849 m), in words: "about two-thirds as high as Mount Everest". */
+function everest(m) {
+  const r = m / 8849;
+  if (r >= 1.05) return `${r.toFixed(1)} times as high as Mount Everest`;
+  if (r >= 0.95) return "about as high as Mount Everest";
+  const parts = [[0.25, "a quarter"], [1 / 3, "a third"], [0.5, "half"], [2 / 3, "two-thirds"], [0.75, "three-quarters"], [0.9, "nine-tenths"]];
+  const [, w] = parts.reduce((b, p) => (Math.abs(p[0] - r) < Math.abs(b[0] - r) ? p : b));
+  return `about ${w} as high as Mount Everest`;
+}
+const COLUMN_MAX_KT = 100;   // the BAKER-scaled column height is only quoted up to here (about 3x the largest underwater test)
 export const FACTS = [
   "Sound travels about four times faster in water than in air: about 1,500 m/s against 340 m/s.",
   "The 1946 BAKER test threw up a column of about a million tons of water, 2,000 ft wide and 6,000 ft high (Glasstone & Dolan).",
@@ -95,7 +105,8 @@ export function initSimple(ctx) {
       </div>
       <div class="spMore"><button class="spDiveBtn">🌊 Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button></div>
       <p class="spNote">Every number comes from published science (Glasstone &amp; Dolan, the U.S. Navy and others).
-        Distances and sizes are to scale; the bursts are hypothetical.</p>
+        Distances and sizes are to scale; the bursts are hypothetical.
+        The explosion has a bright flash: you can soften it in Settings (⚙).</p>
     </div>
     <div class="spCount" hidden><div class="spCountNum"></div><div class="spFact"></div></div>
     <div class="spCaption" hidden></div>
@@ -113,7 +124,7 @@ export function initSimple(ctx) {
   const q = (s) => el.querySelector(s);
   const choice = { bomb: "hiroshima", where: "under", sea: "fill" };   // underwater first: it is the site's question
   el.querySelectorAll(".spCards").forEach((box) => {
-    const mark = () => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group]));
+    const mark = () => box.querySelectorAll(".spCard").forEach((b) => (b.classList.toggle("on", b.dataset.key === choice[box.dataset.group]), b.setAttribute("aria-pressed", b.dataset.key === choice[box.dataset.group])));
     box.addEventListener("click", (e) => {
       const b = e.target.closest(".spCard"); if (!b) return;
       choice[box.dataset.group] = b.dataset.key; mark();
@@ -191,7 +202,10 @@ export function initSimple(ctx) {
     const tl = (data.receivers || []).filter((x) => recById[x.id] && !x.error);
     const beats = [];
     const PACE = 1.4;   // seconds on screen per beat are multiplied by this (and by the speed setting)
-    const beat = (t, cam, text, dur = 3.2) => beats.push({ t, cam, text, dur: dur * PACE });
+    const beat = (t, cam, text, dur = 3.2, real = null) => beats.push({ t, cam, text, dur: dur * PACE, real });
+    // an impact far away happens late, when the film is skimming fast through time; play the moments
+    // around it as they happen (one second per second) so it moves at the same pace as a close one
+    const REAL_FROM = 1.5;   // s: impacts later than this get a stretch at real speed
 
     // 1. the burst itself
     if (bz >= 0) {
@@ -226,15 +240,17 @@ export function initSimple(ctx) {
       already.add(star.id);
       const inAir = g.items.find((x) => x.id === star.id).pulse.medium === "air";
       const what = inAir ? "The blast wave" : bz >= 0 ? "The pressure wave, pushed down into the sea," : "The shock wave";
-      beat(g.t * 0.72, { name: "focus", id: star.id },
-        `${fmtT(g.t)}: ${what} reaches ${listNames(items)} (${fmtKm(Math.hypot(star.x_m, star.y_m || 0))} away).`, 3.6);
+      const text = `${fmtT(g.t)}: ${what} reaches ${listNames(items)} (${fmtKm(Math.hypot(star.x_m, star.y_m || 0))} away).`;
+      const big = star.kind === "person" || star.kind === "ship";
+      if (g.t > REAL_FROM) { const t0 = Math.max(g.t - 2, g.t * 0.72); beat(t0, { name: "focus", id: star.id }, text, 2.4, [t0, g.t + (big ? 7 : 4)]); }
+      else beat(g.t * 0.72, { name: "focus", id: star.id }, text, 3.6);
     }
 
     // 3. the cloud (or column)
     if (bz >= 0) {
       const top = cloudTopM(y);
       beat(Math.max(40, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "side" }, "The fireball rises and cools; the mushroom cloud climbs, sucking up air, spray and debris.", 6);
-      beat(270, { name: "far" }, `The cloud stops rising about ${fmtKm(top)} up: ${(top / 8849).toFixed(1)} times as high as Mount Everest.`, 6);
+      beat(270, { name: "far" }, `The cloud stops rising about ${fmtKm(top)} up: ${everest(top)}.`, 6);
     } else {
       beat(Math.max(60, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "far" }, "The column falls back and a ring of mist, the base surge, rolls out across the sea.", 4.5);
     }
@@ -243,12 +259,17 @@ export function initSimple(ctx) {
     const boatTl = tl.find((x) => ["person", "ship"].includes(recById[x.id].kind) && x.waves && x.waves.height_high_m > 0.5);
     if (boatTl) {
       const tw = boatTl.waves.max_wave_arrival_s;
-      beat(tw * 0.8, { name: "focus", id: boatTl.id, low: true },
-        `${fmtT(tw)}: waves up to ${Math.round(boatTl.waves.height_high_m)} m high reach ${nameOf(recById[boatTl.id])}.`, 4);
+      const text = `${fmtT(tw)}: waves up to ${Math.round(boatTl.waves.height_high_m)} m high reach ${nameOf(recById[boatTl.id])}.`;
+      if (tw > REAL_FROM * 4) beat(tw - 6, { name: "focus", id: boatTl.id, low: true }, text, 2.4, [tw - 6, tw + 14]);
+      else beat(tw * 0.8, { name: "focus", id: boatTl.id, low: true }, text, 4);
     }
 
     beats.sort((a, b) => a.t - b.t);
     for (let k = 1; k < beats.length; k++) if (beats[k].t <= beats[k - 1].t) beats[k].t = beats[k - 1].t * 1.05;   // strictly later
+    for (let k = 0; k < beats.length - 1; k++) {   // a real-speed stretch must end before the next beat starts
+      const b = beats[k];
+      if (b.real) { b.real[0] = b.t; b.real[1] = Math.min(b.real[1], beats[k + 1].t / 1.02); if (b.real[1] <= b.real[0]) b.real = null; }
+    }
     const end = Math.max(bz >= 0 ? 600 : 300, beats[beats.length - 1].t * 1.3);
     film = { simT: beats[0].t, lastSet: null, beats, k: -1, elapsed: 0, end, camLocked: false, paused: false };
     q(".spPause").textContent = "⏸ Pause";
@@ -276,6 +297,7 @@ export function initSimple(ctx) {
   function goBeat(k) {
     film.k = k; film.elapsed = 0;
     const b = film.beats[k];
+    b.from = b.t; b.live = !!b.real;   // a beat with a real-speed stretch plays that first, then glides on
     if (!film.camLocked) { ctx.setShot(b.cam, k === 0); ctx.drift(b.cam.name !== "focus"); }   // slow turn on wide shots only
     // the caption comes in as the camera arrives at its new shot (the move takes about a second)
     setCaption(b.text, k === 0 || film.camLocked);
@@ -295,8 +317,14 @@ export function initSimple(ctx) {
     if (film.lastSet != null && Math.abs(ctx.timeline.getTime() - film.lastSet) > 1e-6 * Math.max(1, film.lastSet)) { finish(); return; }
     const b = film.beats[film.k], next = film.beats[film.k + 1];
     const tNext = next ? next.t : film.end;
-    const f = Math.min(film.elapsed / b.dur, 1);
-    film.simT = b.t * Math.pow(tNext / b.t, f);             // glide in log time: slow motion early, fast later
+    let f = 0;
+    if (b.live) {   // as it happens: one simulated second per second (times the speed setting)
+      if (!film.paused) film.simT = Math.min(film.simT + dt * speed, b.real[1]);
+      if (film.simT >= b.real[1]) { b.live = false; b.from = b.real[1]; film.elapsed = 0; }
+    } else {
+      f = Math.min(film.elapsed / b.dur, 1);
+      film.simT = b.from * Math.pow(tNext / b.from, f);    // glide in log time: slow motion early, fast later
+    }
     ctx.timeline.setTime(film.simT); film.lastSet = ctx.timeline.getTime();
     if (f >= 1) {
       if (next) goBeat(film.k + 1);
@@ -369,13 +397,16 @@ export function initSimple(ctx) {
     if (sc.burst.z_m >= 0) {
       const top = cloudTopM(y);
       // compare with whatever is just smaller than it, so it always reads "N times as high as ..."
-      const cmp = top >= 11000 ? `${(top / 8849).toFixed(1)} times as high as Mount Everest, and higher than airliners fly`
+      const cmp = top >= 11000 ? `${everest(top)}, and higher than airliners fly`
         : top >= 8849 ? `higher than Mount Everest (8.8 km)`
         : `${(top / 828).toFixed(top < 2000 ? 1 : 0)} times the height of the world's tallest building (828 m)`;
       L.push(`☁️ The cloud rose about ${fmtKm(top)}: ${cmp}.`);
     } else {
+      // Only scale the BAKER column (20 kt, 1946) to bombs of a similar size: the largest underwater nuclear tests
+      // were about 30 kt (BAKER, WIGWAM). Far beyond that, how high the water goes is simply not known.
       const k = Math.cbrt(y / 20), vent = (-sc.burst.z_m * 3.28084 / Math.cbrt(y)) < 35;
-      L.push(`🌊 A column of water about ${fmtKm((vent ? 1830 : 270) * k)} high shot out of the sea (scaled from the 1946 BAKER test).`);
+      if (y <= COLUMN_MAX_KT) L.push(`🌊 A column of water about ${fmtKm((vent ? 1830 : 270) * k)} high shot out of the sea (scaled from the 1946 BAKER test).`);
+      else L.push(`🌊 How high the water would be thrown is not known: no bomb this big has ever gone off underwater. The largest underwater tests were about 30 kilotons; at 1946's BAKER test the column of water was about 1.8 km high.`);
     }
     const fish = by.fish_bladder?.lethal;
     if (fish) {
@@ -467,7 +498,7 @@ export function initSimple(ctx) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)].key;
   q(".spRandom").addEventListener("click", () => {
     choice.bomb = pick(BOMBS); choice.where = pick(WHERE); choice.sea = pick(SEAS);
-    el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group])));
+    el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => (b.classList.toggle("on", b.dataset.key === choice[box.dataset.group]), b.setAttribute("aria-pressed", b.dataset.key === choice[box.dataset.group]))));
     detonate();
   });
   q(".spDiveBtn").addEventListener("click", () => ctx.openDive?.(choice));
@@ -496,7 +527,7 @@ export function initSimple(ctx) {
       if (BOMBS.some((x) => x.key === bomb)) choice.bomb = bomb;
       if (WHERE.some((x) => x.key === where)) choice.where = where;
       if (SEAS.some((x) => x.key === sea)) choice.sea = sea;
-      el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => b.classList.toggle("on", b.dataset.key === choice[box.dataset.group])));
+      el.querySelectorAll(".spCards").forEach((box) => box.querySelectorAll(".spCard").forEach((b) => (b.classList.toggle("on", b.dataset.key === choice[box.dataset.group]), b.setAttribute("aria-pressed", b.dataset.key === choice[box.dataset.group]))));
       q(".spGo").classList.add("pulse");
     },
   };

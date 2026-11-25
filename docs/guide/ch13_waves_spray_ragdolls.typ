@@ -78,10 +78,41 @@ free models made by artists, no longer shapes built in code:
   (recoloured for loggerhead and leatherback), a sea lion and two flying gulls (the darker one, darkened
   further, is the frigatebird).
 
+The schools of fish now use the sardine model too, a thousand copies at once, each waving its tail
+until the pressure pulse hurts it.
+
+Divers' gear (tank, vest, mask and fins) is fitted to the body *as it is posed*, measured from the
+bones, so it stays on when a ragdoll takes over: the fins ride on the feet.
+
 The models without an animation are bent a little every frame: fish wave their tails from side to side,
 whales and dolphins beat their flukes up and down (as real ones do), birds flap and turtles paddle.
 When a ragdoll takes over, the animal is frozen in its current pose and given the same bendy spine as
 before. All of this is drawing; it changes no result.
+
+*Keeping a ragdoll in one piece.* Early ragdolls sometimes bent in ways no body can: knees folding
+forward, elbows bending backwards, joints pulling apart and limbs whirling. A test page throws a person
+80 times (pushes of 2 to 40 m/s, standing on a deck and swimming) and measures what goes wrong. The
+fixes, each checked against those numbers:
+- knees and elbows are *hinges* that turn about the bone's own axis, one way only (knee from 5° past
+  straight to 135°, elbow to 140°), like real joints;
+- hips, shoulders, neck and spine swing within cones aimed the way they really move (a hip swings much
+  further forward than back), with realistic twist limits (hip 40°, shoulder 60°);
+- the twist of each joint is measured from directions that agree at the start; before, cannon-es could
+  count a joint as "over-twisted" from the first moment, and the snap back set the whole body spinning;
+- the whole body starts with one gentle tumble instead of each part spinning its own way;
+- the physics takes smaller steps (1/120 s) with more solver passes.
+
+#table(
+  columns: (auto, auto, auto), stroke: 0.4pt + luma(180), inset: 6pt,
+  table.header([*Worst case in 80 throws*], [*before*], [*after*]),
+  [knee bent the wrong way], [94°], [5°],
+  [elbow bent the wrong way], [180°], [2° beyond the model's own pose],
+  [joints pulled apart, under water], [22 cm], [0.1 cm],
+  [joints pulled apart, on a deck], [6.6 cm], [2.7 cm (for a moment, on impact)],
+  [fastest spin of a body part], [490 rad/s], [25 rad/s],
+)
+
+These limits are drawing; they do not change any injury result.
 
 == Schools of fish
 

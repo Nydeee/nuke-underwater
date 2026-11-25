@@ -95,9 +95,17 @@ All levels use exactly the same physics; they only change what is *shown* and ho
   swim bladder"). *Why? The numbers* shows the numbers behind it.
 
 The film's playback speed changes as it goes: very slow-motion for the first second (so the flash
-and fireball can be seen), close to real time while the blast passes, then faster while the cloud
-rises. The things in the sea are placed at distances that scale with the cube root of the yield, so
+and fireball can be seen), then faster and faster while the cloud rises. But whenever the blast, the
+shock or a big wave reaches something far away, the film slows back down to *real speed* (one second
+of the event per second on screen) for a few seconds around that moment: about 9 seconds for a boat or
+ship, 6 for an animal and 20 for the biggest waves. So a ship 16 km away shudders at the same pace as
+one close by, instead of flickering past. The things in the sea are placed at distances that scale with the cube root of the yield, so
 every bomb size shows a range from "would not survive" to "unharmed".
+
+*A gentler flash.* The explosion makes the screen flash white. *Settings → Gentler flash and no screen
+shake* softens it a lot (to about a seventh) and stops the camera shaking. It is switched on by itself
+when a device asks for reduced motion (an accessibility setting on phones and computers), and the start
+screen mentions it.
 
 *Extras in Simple mode:*
 - The start screen floats over the calm sea. *Surprise me* picks everything at random.

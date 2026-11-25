@@ -71,6 +71,12 @@ column of water about 600 m across and 1.8 km high, lifting roughly a million to
 that rolled outward faster than a mile a minute and was 3½ miles (5.6 km) across after 4 minutes
 (§2.73).
 
+#caution[The app scales the BAKER column with the cube root of the yield, but it only *quotes* a height
+up to 100 kt. The largest underwater nuclear tests were about 30 kt (BAKER 1946, WIGWAM 1955); scaling
+them to megatons (a "25 km column" for 50 Mt) has nothing behind it, and a megaton bomb only tens of
+metres down would act more like a burst on the surface anyway. So for bigger bombs the results say the
+height is not known. The column is still *drawn* at the scaled size, as an illustration only.]
+
 == Waves
 
 When the crater collapses, it sends out a *train* of waves. Only 2--5% of the yield ends up in

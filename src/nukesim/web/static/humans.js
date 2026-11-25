@@ -99,7 +99,8 @@ export function createHuman({ pose = "stand", outfit = "deck" } = {}) {
 export function dropHuman(p) { live.delete(p); }
 
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
-const turn = (b, x, y = 0, z = 0) => { if (b) b.quaternion.multiply(_q.setFromEuler(_e.set(x, y, z))); };   // on top of the animation
+export const FOOT_POINT = 1.2;   // how far a swimmer's toes are pointed (radians), like a diver with fins
+export const turn = (b, x, y = 0, z = 0) => { if (b) b.quaternion.multiply(_q.setFromEuler(_e.set(x, y, z))); };   // on top of the animation
 /** Animate everyone: the Idle clip, and for swimmers a slow flutter kick added on top of it. */
 export function tickHumans(dt, now) {
   for (const p of live) {
@@ -110,7 +111,7 @@ export function tickHumans(dt, now) {
       const t = now / 1000 + p.phase, k = Math.sin(t * 4.2) * 0.3, b = p.bones;
       turn(b.LeftUpLeg, k); turn(b.RightUpLeg, -k);                   // legs kick in turn
       turn(b.LeftLeg, Math.max(0, -k) * 0.7); turn(b.RightLeg, Math.max(0, k) * 0.7);
-      turn(b.LeftFoot, 0.7); turn(b.RightFoot, 0.7);                  // toes pointed, like with fins
+      turn(b.LeftFoot, FOOT_POINT); turn(b.RightFoot, FOOT_POINT);    // toes pointed, like with fins
       turn(b.Neck, -0.45); turn(b.Head, -0.2);                        // looking ahead
     }
   }

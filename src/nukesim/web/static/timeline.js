@@ -116,36 +116,40 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
       m.style.left = `${uOf(e.t_s) * 100}%`;
       m.style.background = EVENT_COLORS[e.kind] || "#fff";
       m.title = `${fmtTime(e.t_s)}: ${e.label}`;
-      m.addEventListener("pointerdown", (ev) => { ev.stopPropagation(); setT(e.t_s * 1.0001); });
+      m.addEventListener("pointerdown", (ev) => { ev.stopPropagation(); handT(e.t_s * 1.0001); });
       markers.appendChild(m);
     }
   }
   drawTicks();
 
   function setT(v) { t = Math.min(Math.max(v, 0), tEnd); }
+  // the user moving the time by hand (dragging, clicking, arrow keys): the realistic view stays quiet then,
+  // so dragging the slider back and forth does not set off the boom again and again
+  let handAt = -1e9;
+  function handT(v) { handAt = performance.now(); setT(v); }
   function uFromEvent(ev) {
     const r = track.getBoundingClientRect();
     return Math.min(Math.max((ev.clientX - r.left) / r.width, 0), 1);
   }
   let scrubbing = false;
-  track.addEventListener("pointerdown", (ev) => { scrubbing = true; track.setPointerCapture(ev.pointerId); setT(tOf(uFromEvent(ev))); });
+  track.addEventListener("pointerdown", (ev) => { scrubbing = true; track.setPointerCapture(ev.pointerId); handT(tOf(uFromEvent(ev))); });
   track.addEventListener("pointermove", (ev) => {
     const u = uFromEvent(ev);
     hover.hidden = false; hover.style.left = `${u * 100}%`; hover.textContent = fmtTime(tOf(u));
-    if (scrubbing) setT(tOf(u));
+    if (scrubbing) handT(tOf(u));
   });
   track.addEventListener("pointerleave", () => { hover.hidden = true; });
   track.addEventListener("pointerup", () => { scrubbing = false; });
   track.addEventListener("keydown", (ev) => {
-    if (ev.key === "ArrowRight") { setT(tOf(uOf(Math.max(t, T0)) + 0.01)); ev.preventDefault(); }
-    if (ev.key === "ArrowLeft") { setT(tOf(uOf(t) - 0.01)); ev.preventDefault(); }
+    if (ev.key === "ArrowRight") { handT(tOf(uOf(Math.max(t, T0)) + 0.01)); ev.preventDefault(); }
+    if (ev.key === "ArrowLeft") { handT(tOf(uOf(t) - 0.01)); ev.preventDefault(); }
   });
   playBtn.addEventListener("click", () => {
     playing = !playing;
     if (playing && t >= tEnd) t = 0;
     playBtn.textContent = playing ? "❚❚" : "▶";
   });
-  q(".tl-end").addEventListener("click", () => { setT(tEnd); playing = false; playBtn.textContent = "▶"; });
+  q(".tl-end").addEventListener("click", () => { handT(tEnd); playing = false; playBtn.textContent = "▶"; });
   window.addEventListener("keydown", (ev) => {
     if (ev.code !== "Space" || document.body.classList.contains("flying") || document.body.classList.contains("spFilm") || document.querySelector(".modal:not([hidden]), .tourCard")
       || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(document.activeElement?.tagName)) return;
@@ -416,8 +420,9 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
     upToDate: () => !!data && !fetching && fetchedKey === JSON.stringify(payload()),   // data for exactly this scenario
     togglePlay: () => playBtn.click(),
     pause: () => { if (playing) playBtn.click(); },
-    step: (dir) => setT(tOf(Math.min(Math.max(uOf(Math.max(t, T0)) + 0.02 * dir, 0), 1))),   // 1/50 of the slider
-    toStart: () => setT(0),
+    step: (dir) => handT(tOf(Math.min(Math.max(uOf(Math.max(t, T0)) + 0.02 * dir, 0), 1))),   // 1/50 of the slider
+    toStart: () => handT(0),
+    movedByHand: () => scrubbing || performance.now() - handAt < 500,   // the user is moving the time by hand
     toEnd: () => q(".tl-end").click(),
   };
   window.nukesimTimeline = api;   // handy for trying things in the browser console

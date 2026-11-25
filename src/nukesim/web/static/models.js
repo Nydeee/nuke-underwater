@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { speciesOf, ALIASES } from "./species.js";
-import { createHuman, humansReady } from "./humans.js";
+import { createHuman, humansReady, turn, FOOT_POINT } from "./humans.js";
 import { createAnimal } from "./animals.js";
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...extra });
@@ -304,21 +304,42 @@ function riggedDiver() {
   const p = humanModel({ pose: "swim", outfit: "wetsuit" });
   const g = new THREE.Group();
   g.add(p.g);
-  p.g.updateMatrixWorld(true);
+  // measure the body as it is actually posed (not the model's rest pose), then fit the gear to it
+  p.rig.mixer.update(0);
+  turn(p.rig.bones.LeftFoot, FOOT_POINT); turn(p.rig.bones.RightFoot, FOOT_POINT);   // toes pointed, as when swimming
+  g.updateMatrixWorld(true);
   const b = p.rig.bones, gear = std(0xf2c14e), steel = std(0xcfd3d8, { metalness: 0.6, roughness: 0.3 });
-  const place = (mesh, bone, local) => {   // put gear at a point given in the diver's frame, then let it ride on a bone
-    mesh.position.copy(local); g.add(mesh); g.updateMatrixWorld(true);
-    if (bone) bone.attach(mesh);
+  const at = (n) => b[n].getWorldPosition(new THREE.Vector3());
+  const lat = at("RightUpLeg").sub(at("LeftUpLeg")).normalize();        // across the body
+  const along = at("Neck").sub(at("Hips")).normalize();                  // up the spine
+  const front = new THREE.Vector3().crossVectors(lat, along).normalize();
+  if (front.y > 0) front.negate();                                       // a swimming diver faces down
+  const back = front.clone().negate();
+  // turn a part so its x axis lies along a and its y axis along n
+  const basis = (a, n) => {
+    const z = new THREE.Vector3().crossVectors(a, n).normalize(), y = new THREE.Vector3().crossVectors(z, a).normalize();
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(a.clone().normalize(), y, z));
   };
-  const tank = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 6, 14), steel); tank.rotation.z = Math.PI / 2;
-  place(tank, b.Spine2, new THREE.Vector3(0.05, 0.13, 0));
-  const vest = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.27), gear);
-  place(vest, b.Spine2, new THREE.Vector3(0.06, 0.07, 0));
+  const place = (mesh, bone, pos, quat) => {   // put a part where it belongs, then let it ride on a bone
+    mesh.position.copy(pos); mesh.quaternion.copy(quat); g.add(mesh); g.updateMatrixWorld(true);
+    bone.attach(mesh);
+  };
+  const chest = at("Hips").lerp(at("Neck"), 0.55);
+  const tank = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 6, 14), steel);
+  place(tank, b.Spine2, chest.clone().addScaledVector(back, 0.13), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along));
+  const vest = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.25), gear);
+  place(vest, b.Spine2, chest.clone().addScaledVector(back, 0.06), basis(along, back));
+  const headC = at("Head").lerp(at("HeadTop_End"), 0.45);
   const mask = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.1), std(0x7fd3ff, { metalness: 0.3, roughness: 0.1 }));
-  place(mask, b.Head, new THREE.Vector3(0.43, -0.07, 0));
-  for (const [s, foot] of [[1, b.LeftFoot], [-1, b.RightFoot]]) {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.012, 0.1), gear);
-    place(f, foot, new THREE.Vector3(-0.6, -0.02, s * 0.06));
+  place(mask, b.Head, headC.clone().addScaledVector(front, 0.075), basis(front, along));
+  for (const side of ["Left", "Right"]) {
+    // a fin: a flat blade from the middle of the foot out past the toes, widening toward the tip
+    const foot = at(`${side}Foot`), toe = at(`${side}Toe_End`), dir = toe.clone().sub(foot).normalize();
+    const geo = new THREE.BoxGeometry(0.26, 0.012, 0.075, 4, 1, 1), pp = geo.attributes.position;
+    for (let i = 0; i < pp.count; i++) pp.setZ(i, pp.getZ(i) * (1 + 1.3 * (pp.getX(i) / 0.26 + 0.5)));
+    geo.computeVertexNormals();
+    const f = new THREE.Mesh(geo, gear);
+    place(f, b[`${side}Foot`], foot.clone().lerp(toe, 0.5).addScaledVector(dir, 0.13), basis(dir, new THREE.Vector3().crossVectors(dir, lat)));
   }
   return { g, human: p.g, rig: p.rig, bodyMats: p.bodyMats, anat: { ears: [[0.41, 0, 0.07], [0.41, 0, -0.07], 0.025], lungs: [0.16, 0, 0, 0.12],
     gut: [-0.02, 0, 0, 0.1], head: [0.42, 0, 0, 0.1], body: [0, 0, 0, 0.5], skinSide: "+y" }, h: 0.3 };
@@ -424,7 +445,32 @@ function crew(g, n, xs, y, scale, z = 0.02) {
     g.add(p.g);
   }
 }
+/** An artist-made ship (animals.js) with its crew standing on the deck, or null if it is not loaded. */
+function artShip(type) {
+  const key = type === "small_craft" ? "fishingboat" : type === "destroyer" ? "destroyer" : null;
+  const a = key && createAnimal(key);
+  if (!a) return null;
+  const g = a.g;
+  g.updateMatrixWorld(true);
+  // find the deck under each crew member by dropping a line from above
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  const deckAt = (x, z) => { ray.set(new THREE.Vector3(x, 2, z), down); return ray.intersectObject(g, true)[0]?.point.y ?? 0.05; };
+  const [n, xs, scale, zs] = type === "small_craft" ? [3, [-0.4, -0.2], 0.08, 0.04] : [4, [-0.4, 0.38], 0.012, 0.02];
+  const people = [];
+  for (let i = 0; i < n; i++) people.push([xs[0] + (xs[1] - xs[0]) * (i / Math.max(n - 1, 1)), (i % 2 ? 1 : -1) * zs]);
+  for (const [i, [x, z]] of people.entries()) {
+    const p = humanModel({ outfit: i % 2 ? "orange" : "deck" });
+    p.g.scale.setScalar(scale);
+    p.g.position.set(x, deckAt(x, z), z);
+    p.g.rotation.y = Math.PI / 2 + (i % 3) * 0.7;
+    g.add(p.g);
+  }
+  return { g, bodyMats: [], anat: null, h: 0.2, ship: true };
+}
+
 function shipModel(type) {
+  const art = artShip(type);
+  if (art) return art;
   const g = new THREE.Group();
   const add = (geo, mat, x, y, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
   let deckY = 0.05;

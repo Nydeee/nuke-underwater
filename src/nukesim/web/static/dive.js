@@ -64,6 +64,9 @@ export function createDive({ api, toast }) {
     el.style.setProperty("--depthDark", f.toFixed(3));
   });
 
+  // the page scrolls below the bar of controls, however tall it is (it wraps onto more rows on a phone)
+  const fitTop = () => { scroll.style.top = `${q(".dvTop").offsetHeight}px`; };
+  window.addEventListener("resize", () => { if (!el.hidden) fitTop(); });
   const distOf = (v) => scale * Math.pow(10, (v - 500) / 400);   // the slider moves in steps of ratio, around the scale
   function burst() {
     const b = BOMBS.find((x) => x.key === choice.bomb), k = Math.cbrt(b.kt / 15);
@@ -108,7 +111,9 @@ export function createDive({ api, toast }) {
       scale = 1100 * Math.cbrt(b.kt / 15);   // the same distance scale as the film
       slider.value = 500;
       q(".dvBomb").value = choice.bomb; q(".dvWhere").value = choice.where;
-      el.hidden = false; scroll.scrollTop = 0; scroll.dispatchEvent(new Event("scroll"));
+      el.hidden = false;
+      fitTop();
+      scroll.scrollTop = 0; scroll.dispatchEvent(new Event("scroll"));
       compute();
     },
   };

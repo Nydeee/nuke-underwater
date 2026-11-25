@@ -67,6 +67,16 @@ radiation, flash blindness) and *below deck*:
 #caution[Capsizing, being swamped by the waves, fires and flying debris are not assessed: there are no
 published numbers to base them on.]
 
+*How a ship is drawn when it is hit.* Only the damage to the *ship itself* moves the ship. (An
+earlier version flipped the whole ship over when its crew on deck were badly hurt, even if the hull
+was fine; that was a bug.) The hull shudders when the shock arrives; a ship that is *disabled* takes
+on a slight list; one that is *wrecked or sunk* leans over by about 23° and slowly settles low in the
+water over four minutes. How a ship really lists or sinks is not in the sources, so this movement is
+only an illustration of the damage level.
+
+The fishing boat and the destroyer are free models made by artists ("Boat" by Poly by Google and "low
+poly battleship" by angelo raffaele Catalano, both CC-BY 3.0); the crew stand on their real decks.
+
 == Weather and time of day
 
 The *Conditions* section on the left sets the time of day, how clear the air is, and whether it is
