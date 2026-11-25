@@ -15,6 +15,7 @@ uv run python scripts/plot_fallout_sea.py --yield-kt 1000 --height-m 0 --x-km 50
 uv run python scripts/plot_thermal_water.py --yield-kt 1000 --height-m 2000 --range-km 3
 uv run python scripts/plot_effects_zones.py --yield-kt 20 --height-m -27 --kind mammal --mass-kg 200
 uv run python scripts/plot_long_term.py --yield-kt 1000 --height-m 0 --x-km 50 --depth-m 10
+uv run python scripts/plot_surface_bursts.py --yield-kt 1000 --burst-depth-m 30 --water-depth-m 4000
 uv run python scripts/plot_shock.py --yield-kt 20 --burst-depth-m 27 --range-m 1000
 ```
 
@@ -33,7 +34,7 @@ Underwater bursts are an optional mode.
 5. ✅ Thermal radiation on the sea: heating, boiling, burns on deck (`effects/thermal.py`, `effects/thermal_water.py`)
 6. ✅ 6a Immediate effects on fish, marine mammals, turtles, divers, people on deck (`biology/`)
    ✅ 6b Fallout radiation over weeks and radioactive uptake into fish (`biology/uptake.py`, `biology/long_term.py`)
-7. Low and surface bursts: direct shock into the water when the fireball touches it, crater, waves (plus bubble/surface phenomena for underwater bursts)
+7. ✅ Low and surface bursts: direct shock coupling, crater, waves and shoaling (`effects/near_surface_shock.py`, `effects/water_waves.py`)
 8. Web UI with 3D placement
 9. Uncertainty bands everywhere
 

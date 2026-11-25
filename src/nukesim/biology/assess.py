@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .. import units
-from ..effects import air_blast, air_to_water, radiation_shielding, thermal, underwater_shock
+from ..effects import air_blast, air_to_water, near_surface_shock, radiation_shielding, thermal, underwater_shock
 from ..scenario import Burst, Environment, Receiver
 from . import criteria as c
 
@@ -57,7 +57,22 @@ class Assessment:
 
 # --- pressure history in the water --------------------------------------------
 def _water_pulse(burst: Burst, receiver: Receiver, env: Environment):
-    """(t, p, cutoff_delay_s or None) at an underwater receiver."""
+    """(t, p, cutoff_delay_s or None) at an underwater receiver.
+
+    Deep bursts use Section 1; bursts within EM-1's near-surface range use the
+    coupling model (Section 7) -- and for those just above the water, whichever of
+    the direct shock and the transmitted air blast is stronger; higher bursts use
+    Section 2.
+    """
+    if near_surface_shock.in_regime(burst):
+        ns = near_surface_shock.compute(burst, receiver, env)
+        t = np.linspace(ns.arrival_time_s - 0.1 * ns.time_constant_s, ns.arrival_time_s + 10 * ns.time_constant_s, 40_001)
+        p = ns.pressure_history(t)
+        if burst.z_m >= 0:
+            aw = air_to_water.compute(burst, receiver, env)
+            if aw.peak_overpressure_pa > ns.peak_pressure_pa:
+                return aw.t, aw.p, None
+        return t, p, None
     if burst.z_m < 0:
         res = underwater_shock.compute(burst, receiver, env)
         t = np.linspace(res.arrival_time_s - 0.1 * res.time_constant_s, res.arrival_time_s + 10 * res.time_constant_s, 40_001)

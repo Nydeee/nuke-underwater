@@ -235,10 +235,20 @@ def fig_long_term():
     save(fig, "long_term_fish.png")
 
 
+def fig_surface_bursts():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("psb", ROOT / "scripts" / "plot_surface_bursts.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    save(mod.plot(1000, 30, 4000), "surface_bursts.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
               fig_surface_overpressure, fig_trace_speed, fig_water_map,
-              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water, fig_zones, fig_long_term):
+              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea, fig_thermal_water, fig_zones, fig_long_term,
+              fig_surface_bursts):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))

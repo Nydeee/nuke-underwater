@@ -13,5 +13,6 @@
 #include "ch05_thermal.typ"
 #include "ch06_biology_immediate.typ"
 #include "ch07_biology_long_term.typ"
+#include "ch08_surface_bursts.typ"
 #include "glossary.typ"
 #include "references.typ"
