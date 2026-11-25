@@ -1,0 +1,27 @@
+[project]
+name = "nukesim"
+version = "0.1.0"
+description = "Accuracy-first simulator of nuclear detonation effects in and on water"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+]
+
+[dependency-groups]
+dev = [
+    "pypdfium2>=5.15.2",
+    "pytest>=8",
+    "typst>=0.15.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nukesim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
