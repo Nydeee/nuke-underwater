@@ -44,7 +44,7 @@ Underwater bursts are an optional mode.
    ✅ 6b Fallout radiation over weeks and radioactive uptake into fish (`biology/uptake.py`, `biology/long_term.py`)
 7. ✅ Low and surface bursts: direct shock coupling, crater, waves and shoaling (`effects/near_surface_shock.py`, `effects/water_waves.py`)
 8. ✅ Local 3D web interface (`web/`, `uv run nukesim-web`)
-9. Uncertainty bands everywhere
+9. ✅ Uncertainty: Monte Carlo ranges and outcome probabilities (`uncertainty.py`, `biology/uncertain.py`; "Show uncertainty" in the web app)
 
 Physics explanations live in `docs/physics/`.
 

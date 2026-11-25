@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .. import units
+from ..uncertainty import factor
 from ..geometry import image_range_m, slant_range_m
 from ..scenario import Burst, Environment, Receiver
 
@@ -108,7 +109,7 @@ def effective_tnt_lb(yield_kt: float) -> float:
 # ---------------------------------------------------------------------------
 def peak_pressure_pa(yield_kt: float, slant_range_m: float) -> float:
     """Free-field peak shock overpressure (Pa) at a slant range (m)."""
-    return tnt_peak_pressure_psi(effective_tnt_lb(yield_kt), slant_range_m * units.M_TO_FT) * units.PSI_TO_PA
+    return tnt_peak_pressure_psi(effective_tnt_lb(yield_kt), slant_range_m * units.M_TO_FT) * units.PSI_TO_PA * factor("underwater_shock")
 
 
 def time_constant_s(yield_kt: float, slant_range_m: float) -> float:
@@ -118,7 +119,7 @@ def time_constant_s(yield_kt: float, slant_range_m: float) -> float:
 
 def impulse_pa_s(yield_kt: float, slant_range_m: float) -> float:
     """Free-field shock impulse (Pa*s), i.e. area under the pressure-time curve."""
-    return tnt_impulse_psi_s(effective_tnt_lb(yield_kt), slant_range_m * units.M_TO_FT) * units.PSI_TO_PA
+    return tnt_impulse_psi_s(effective_tnt_lb(yield_kt), slant_range_m * units.M_TO_FT) * units.PSI_TO_PA * factor("underwater_shock")
 
 
 # ---------------------------------------------------------------------------

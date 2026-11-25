@@ -21,6 +21,7 @@ import math
 from dataclasses import dataclass, field
 
 from .. import units
+from ..uncertainty import factor
 from .air_blast import is_contact_burst
 
 M_PER_MILE = 1609.344  # exact
@@ -80,4 +81,5 @@ def incident_dose(yield_kt: float, height_m: float, slant_range_m: float) -> Inc
         warnings.append("Yield outside 1-20,000 kt, the range Fletcher's fits were made for.")
     surface = is_contact_burst(yield_kt, height_m)
     n_rem, g_rem = fletcher_dose_rem(yield_kt, miles, surface_burst=surface)
-    return IncidentDose(slant_range_m, n_rem * REM_TO_GY, g_rem * REM_TO_GY, warnings)
+    f = factor("initial_radiation")
+    return IncidentDose(slant_range_m, n_rem * REM_TO_GY * f, g_rem * REM_TO_GY * f, warnings)

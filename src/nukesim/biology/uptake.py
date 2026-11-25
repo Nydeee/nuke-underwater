@@ -31,6 +31,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..uncertainty import factor
+
 FISSIONS_PER_KT = 1.45e23     # glasstone1977 Table 1.45
 DAY_S = 86400.0
 YEAR_D = 365.25
@@ -107,6 +109,6 @@ def fish_uptake(r1_rad_h: float, times_h: np.ndarray, layer_depth_m: np.ndarray,
         bq_m2 = kt_m2 * activity_bq_per_kt(n, times_h, fissile)
         bq_per_l = bq_m2 / np.asarray(layer_depth_m) / 1000.0 * np.asarray(in_layer, dtype=float)
         water[n.name] = bq_per_l
-        fish[n.name] = n.cf_fish * bq_per_l
+        fish[n.name] = n.cf_fish * factor("cf_fish") * bq_per_l
         internal = internal + n.dc_int * fish[n.name]
     return FishUptake(np.asarray(times_h), water, fish, internal)

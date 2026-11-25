@@ -80,3 +80,18 @@ def test_fallout_series():
     j = client.post("/api/fallout", json=body).json()
     assert len(j["times_h"]) == len(j["total_high_ugy_h"]) > 10
     assert max(j["total_high_ugy_h"]) > 0
+
+
+def test_assess_with_uncertainty():
+    body = {"burst": {"yield_kt": 20, "z_m": 500}, "uncertainty": True, "n_samples": 50,
+            "receivers": [{"id": "p", "kind": "person", "x_m": 1000, "z_m": 2}]}
+    u = client.post("/api/assess", json=body).json()["receivers"][0]["uncertain"]
+    assert u["n"] == 50
+    assert sum(u["level_probs"].values()) == pytest.approx(1.0)
+    assert all(e["p05"] <= e["p50"] <= e["p95"] for e in u["effects"])
+
+
+def test_uncertainty_list():
+    items = client.get("/api/uncertainties").json()
+    assert {"brode_peak", "initial_radiation", "cf_fish"} <= {i["name"] for i in items}
+    assert {i["basis"] for i in items} == {"sourced", "judgement"}

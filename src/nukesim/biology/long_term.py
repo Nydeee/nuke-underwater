@@ -16,6 +16,7 @@ import numpy as np
 
 from ..effects import sea_contamination as sc
 from ..scenario import Burst, Environment, Receiver
+from ..uncertainty import pick
 from . import criteria as c
 from . import uptake as up
 
@@ -37,6 +38,7 @@ class LongTermResult:
     fish_bq_per_kg: dict | None
     findings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    summary: dict = field(default_factory=dict)   # key numbers (position in the low-high range set by uncertainty)
 
 
 def _acc(rate_gy_h: np.ndarray, t: np.ndarray) -> np.ndarray:
@@ -56,7 +58,8 @@ def assess_long_term(burst: Burst, receiver: Receiver, env: Environment | None =
     if sd.r1_rad_h[1] == 0.0:
         findings.append("No local fallout reaches this spot (or the burst is too high for local fallout).")
         zero = np.zeros_like(t)
-        return LongTermResult(receiver, t, (zero, zero), None, (zero, zero), (zero, zero), None, findings, notes)
+        return LongTermResult(receiver, t, (zero, zero), None, (zero, zero), (zero, zero), None, findings, notes,
+                              {"peak_ugy_h": 0.0, "dose_gy": 0.0})
 
     if receiver.kind == "fish":
         in_layer = receiver.depth_m <= sd.layer_depth_m
@@ -90,7 +93,9 @@ def assess_long_term(burst: Burst, receiver: Receiver, env: Environment | None =
         notes.append("Internal dose assumes fish instantly match the water and no fractionation or sideways dilution: upper estimate.")
         if fissile != "U235":
             notes.append(f"Fission yields for {fissile}.")
-        return LongTermResult(receiver, t, ext, tuple(internal), total, acc, fish_bq, findings, notes)
+        summary = {"peak_ugy_h": pick(total[0].max(), total[1].max(), "fallout_fraction_u"),
+                   "dose_gy": pick(acc[0][-1], acc[1][-1], "fallout_fraction_u")}
+        return LongTermResult(receiver, t, ext, tuple(internal), total, acc, fish_bq, findings, notes, summary)
 
     # people (on a boat or swimming) and other animals: external dose only
     total = tuple(e * 1e6 for e in ext)
@@ -104,4 +109,7 @@ def assess_long_term(burst: Burst, receiver: Receiver, env: Environment | None =
         findings.append(f"First week: {float(np.interp(24 * 7, t, acc[0])):.3g}-{d7:.3g} Gy -> {lvl_txt} "
                         "(pessimistic: a dose spread over days is less harmful than the same dose at once).")
     findings.append(f"Over {days:g} days: {acc[0][-1]:.3g}-{acc[1][-1]:.3g} Gy.")
-    return LongTermResult(receiver, t, ext, None, total, acc, None, findings, notes)
+    summary = {"peak_ugy_h": pick(total[0].max(), total[1].max(), "fallout_fraction_u"),
+               "dose_gy": pick(acc[0][-1], acc[1][-1], "fallout_fraction_u"),
+               "dose_7d_gy": pick(float(np.interp(24 * 7, t, acc[0])), d7, "fallout_fraction_u")}
+    return LongTermResult(receiver, t, ext, None, total, acc, None, findings, notes, summary)

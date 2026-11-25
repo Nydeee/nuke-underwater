@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..scenario import Burst, Environment, Receiver
+from ..uncertainty import factor
 from . import air_blast
 
 
@@ -96,6 +97,7 @@ def compute(burst: Burst, receiver: Receiver, env: Environment | None = None, n_
         p = sb.overpressure(t - lag)  # exact pure delay (avoids FFT ringing at the sharp front)
     else:
         p = transmit_waveform(t, sb.overpressure(t), v, c, depth)
+    p = p * factor("air_to_water")
     # Water cannot hold much tension: absolute pressure >= 0 (crude cavitation cap).
     p = np.maximum(p, -env.hydrostatic_pressure_pa(depth))
 

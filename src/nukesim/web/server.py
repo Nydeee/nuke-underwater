@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 from .. import units
 from ..biology.assess import LEVELS, assess
 from ..biology.long_term import assess_long_term
+from ..biology.uncertain import assess_uncertain
+from ..uncertainty import INGREDIENTS
 from ..effects import (air_blast, air_to_water, fallout, near_surface_shock, radiation_shielding,
                        underwater_shock, water_waves)
 from ..scenario import Burst, Environment, Receiver
@@ -59,6 +61,8 @@ class Scenario(BaseModel):
 class AssessIn(Scenario):
     receivers: list[ReceiverIn] = []
     long_term: bool = True
+    uncertainty: bool = False
+    n_samples: int = Field(200, ge=20, le=2000)
 
 
 class FieldIn(Scenario):
@@ -179,8 +183,25 @@ def assess_all(a: AssessIn):
                 item["long_term"] = {"findings": lt.findings, "notes": lt.notes}
             except (ValueError, NotImplementedError) as exc:
                 item["long_term"] = {"findings": [f"not available: {exc}"], "notes": []}
+        if a.uncertainty and "error" not in item:
+            lt_ok = a.long_term and r_in.kind in ("fish", "person", "diver") and b.z_m >= 0
+            ua = assess_uncertain(b, r, env, n=a.n_samples, long_term=lt_ok,
+                                  **({"wind_mph": a.burst.wind_mph, "fission_fraction": a.burst.fission_fraction} if lt_ok else {}))
+            item["uncertain"] = {
+                "n": ua.n, "level_probs": ua.level_probs, "most_likely": ua.most_likely,
+                "effects": [{"name": e.name, "unit": e.unit, "p05": e.p05, "p50": e.p50, "p95": e.p95,
+                             "level_probs": e.level_probs} for e in ua.effects],
+                "long_term": ua.long_term, "notes": ua.notes,
+            }
         out.append(item)
     return _clean({"receivers": out})
+
+
+@app.get("/api/uncertainties")
+def uncertainties():
+    """The list of uncertain ingredients, their ranges and where each range comes from."""
+    return [{"name": i.name, "description": i.description, "kind": i.kind, "spread": i.spread,
+             "low": i.low, "high": i.high, "basis": i.basis, "source": i.source} for i in INGREDIENTS]
 
 
 @app.post("/api/field")

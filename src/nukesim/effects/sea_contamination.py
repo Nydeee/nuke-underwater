@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..scenario import Burst, Environment, Receiver
+from ..uncertainty import factor, param
 from . import fallout as fo
 from .radiation_shielding import gamma_tvt_m
 
@@ -63,7 +64,8 @@ def decay_factor(t_h: np.ndarray | float) -> np.ndarray | float:
 def mixing_depth_m(t_since_deposit_h, thermocline_m: float = DEFAULT_THERMOCLINE_M,
                    water_depth_m: float = math.inf):
     """Depth of the contaminated layer vs time since the fallout landed (redwing1956)."""
-    h = INITIAL_MIX_DEPTH_M + SINK_RATE_M_PER_H * np.maximum(t_since_deposit_h, 0.0)
+    h = (param("mix_initial_m", INITIAL_MIX_DEPTH_M)
+         + param("mix_sink_m_per_h", SINK_RATE_M_PER_H) * np.maximum(t_since_deposit_h, 0.0))
     return np.minimum(np.minimum(h, thermocline_m), water_depth_m)
 
 
@@ -111,7 +113,7 @@ def compute(burst: Burst, receiver: Receiver, env: Environment | None = None, *,
     rates = []
     for r1 in fa.r1_rad_h:
         a1 = gamma_bq_per_m2_at_1h(r1)
-        d_inf = infinite_medium_dose_rate_gy_h(a1, layer, env.density_kg_m3) * decay_factor(times)
+        d_inf = infinite_medium_dose_rate_gy_h(a1, layer, env.density_kg_m3) * decay_factor(times) * factor("fallout_decay")
         if receiver.z_m >= 0:   # on a boat / above water: half the surface infinite-medium value
             rates.append(0.5 * d_inf)
         else:

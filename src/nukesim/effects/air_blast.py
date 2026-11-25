@@ -24,6 +24,7 @@ import numpy as np
 from scipy.optimize import brentq
 
 from .. import units
+from ..uncertainty import factor
 
 # Unit helpers: Brode works in kilofeet (kft), milliseconds and psi.
 M_PER_KFT = 1000.0 * units.FT_TO_M
@@ -157,7 +158,7 @@ def peak_overpressure_pa(yield_kt: float, height_m: float, ground_range_m: float
     m = _scale(yield_kt)
     x = ground_range_m / M_PER_KFT / m
     y = height_m / M_PER_KFT / m
-    return brode_hob_psi(x, y) * units.PSI_TO_PA
+    return brode_hob_psi(x, y) * units.PSI_TO_PA * factor("brode_peak")
 
 
 def arrival_time_s(yield_kt: float, height_m: float, ground_range_m: float) -> float:

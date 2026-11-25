@@ -136,7 +136,9 @@ function buildStatic() {
   staticGroup.add(burst);
   if (info && info.fireball_radius_m) {
     const r = info.fireball_radius_m / 1000;
-    const fb = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16),
+    // fireball in the air: only the part above the water surface is drawn
+    const cut = Math.min(Math.max(toY(bz) / r, -1), 1);
+    const fb = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.acos(-cut)),
       new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.35, depthWrite: false }));
     fb.position.copy(burst.position);
     staticGroup.add(fb);
@@ -168,8 +170,7 @@ function receiverMesh(r) {
   else if (r.kind === "turtle") geo = new THREE.CylinderGeometry(size * 0.8, size * 0.8, size * 0.35, 20);
   else if (r.kind === "diver") geo = new THREE.CapsuleGeometry(size * 0.35, size * 1.1, 6, 12);
   else geo = new THREE.BoxGeometry(size * 2.2, size * 0.7, size * 1.0);
-  const res = state.results[r.id];
-  const color = res && res.worst ? LEVEL_COLORS[res.worst] : "#9aa8b6";
+  const color = levelColor(state.results[r.id]);
   const m = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, emissive: r.id === state.selected ? 0x335577 : 0x000000 }));
   if (r.kind === "mammal" || r.kind === "diver") m.rotation.z = r.kind === "mammal" ? Math.PI / 2 : 0;
   m.position.set(r.x_m / 1000, toY(r.z_m), 0);
@@ -250,10 +251,9 @@ function renderList() {
   const ul = $("receiverList");
   ul.innerHTML = "";
   for (const r of state.receivers) {
-    const res = state.results[r.id];
     const li = document.createElement("li");
     if (r.id === state.selected) li.className = "selected";
-    const color = res && res.worst ? LEVEL_COLORS[res.worst] : "#9aa8b6";
+    const color = levelColor(state.results[r.id]);
     const where = r.kind === "person" ? "on deck" : `${Math.round(-r.z_m)} m deep`;
     li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${r.emoji} ${r.label}</span>
       <button class="del" title="Remove">✕</button></div>
@@ -281,6 +281,20 @@ function renderList() {
   }
 }
 
+// Colour: the most likely outcome when uncertainty is shown, otherwise the single best-estimate outcome.
+function levelColor(res) {
+  if (!res || !res.worst) return "#9aa8b6";
+  return LEVEL_COLORS[res.uncertain ? res.uncertain.most_likely : res.worst];
+}
+
+function probBar(probs) {
+  const segs = LEVELS.filter((l) => probs[l] > 0)
+    .map((l) => `<div style="width:${(probs[l] * 100).toFixed(1)}%;background:${LEVEL_COLORS[l]}" title="${l} ${(probs[l] * 100).toFixed(0)}%"></div>`).join("");
+  const text = LEVELS.filter((l) => probs[l] > 0).map((l) => `${l} ${(probs[l] * 100).toFixed(0)}%`).join(" · ");
+  return `<div class="probbar">${segs}</div><div class="probtext">${text}</div>`;
+}
+const fmtNum = (v) => (v == null ? "–" : Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(2) : +v.toPrecision(3));
+
 function select(id) {
   state.selected = id;
   buildReceivers(); renderList(); renderReport(); loadFallout();
@@ -295,15 +309,23 @@ function renderReport() {
   const res = state.results[r.id];
   if (!res) { box.innerHTML = `<p class="hint">Calculating…</p>`; return; }
   if (res.error) { box.innerHTML = `<p class="error">${esc(res.error)}</p>`; return; }
-  let html = `<h3>${r.emoji} ${esc(r.label)} — worst: <span class="level lv-${res.worst}">${res.worst}</span></h3>`;
+  const u = res.uncertain;
+  let html = `<h3>${r.emoji} ${esc(r.label)} — best estimate: <span class="level lv-${res.worst}">${res.worst}</span></h3>`;
+  if (u) html += `<div>Chance of each worst outcome (${u.n} runs):</div>${probBar(u.level_probs)}`;
   for (const e of res.effects) {
+    const ue = u && u.effects.find((x) => x.name === e.name);
+    const range = ue && ue.p05 != null ? `<div class="range">likely range (5–95%): ${fmtNum(ue.p05)} – ${fmtNum(ue.p95)} ${esc(ue.unit)}</div>${probBar(ue.level_probs)}` : "";
     html += `<div class="effect"><span class="level lv-${e.level}">${e.level}</span> <b>${esc(e.name)}</b>
-      <div class="val">${esc(e.value)}</div><div class="src">${esc(e.criterion)} · source: ${esc(e.source)}</div></div>`;
+      <div class="val">${esc(e.value)}</div>${range}<div class="src">${esc(e.criterion)} · source: ${esc(e.source)}</div></div>`;
   }
   if (res.long_term) {
     html += `<h3>Fallout over the following weeks</h3><ul class="notes">${res.long_term.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`;
+    if (u && u.long_term && u.long_term.dose_gy && u.long_term.dose_gy.p95 > 0) {
+      const d = u.long_term.dose_gy;
+      html += `<div class="range">Fallout dose over the period, likely range (5–95%): ${fmtNum(d.p05)} – ${fmtNum(d.p95)} Gy (median ${fmtNum(d.p50)})</div>`;
+    }
   }
-  const notes = [...(res.notes || []), ...((res.long_term && res.long_term.notes) || [])];
+  const notes = [...(res.notes || []), ...((res.long_term && res.long_term.notes) || []), ...((u && u.notes) || [])];
   if (notes.length) html += `<h3>Assumptions &amp; warnings</h3><ul class="notes">${[...new Set(notes)].map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
   box.innerHTML = html;
 }
@@ -317,7 +339,8 @@ async function runAssess() {
   if (!(sc.burst.yield_kt > 0)) return;
   $("status").textContent = "Calculating…";
   try {
-    const data = await api("/api/assess", { ...sc, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
+    const unc = $("uncertainty").checked;
+    const data = await api("/api/assess", { ...sc, uncertainty: unc, n_samples: parseInt($("nSamples").value) || 200, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
       ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })) });
     state.results = Object.fromEntries(data.receivers.map((x) => [x.id, x]));
     $("status").textContent = `Updated · ${state.receivers.length} in the sea`;
@@ -474,6 +497,8 @@ $("deepOcean").addEventListener("change", () => { $("waterDepth").disabled = $("
 $("stretch").addEventListener("input", () => { $("stretchVal").textContent = `${$("stretch").value}%`; buildStatic(); buildReceivers(); });
 $("overlay").addEventListener("change", () => { $("zonesKindLabel").hidden = $("overlay").value !== "zones"; });
 $("computeOverlay").addEventListener("click", computeOverlay);
+$("uncertainty").addEventListener("change", scheduleAssess);
+$("nSamples").addEventListener("change", scheduleAssess);
 
 resize();
 frameCamera();

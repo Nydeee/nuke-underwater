@@ -22,6 +22,7 @@ import math
 from dataclasses import dataclass, field
 
 from .. import units
+from ..uncertainty import factor
 from .air_blast import is_contact_burst
 
 M_PER_MILE = 1609.344
@@ -47,9 +48,9 @@ def radiant_exposure_cal_cm2(yield_kt: float, height_m: float, ground_range_m: f
     """Q (cal/cm^2) on a surface facing the fireball, clear day (Fletcher Eqs. 2.106/2.107)."""
     if is_contact_burst(yield_kt, height_m):
         d = max(ground_range_m, 1.0) / M_PER_MILE
-        return SURFACE_YIELD_FACTOR * yield_kt * _logpoly(EQ_2_106, d)
+        return SURFACE_YIELD_FACTOR * yield_kt * _logpoly(EQ_2_106, d) * factor("thermal")
     ds = math.hypot(ground_range_m, height_m) / M_PER_MILE
-    return yield_kt * _logpoly(EQ_2_106, max(ds, 1e-4))
+    return yield_kt * _logpoly(EQ_2_106, max(ds, 1e-4)) * factor("thermal")
 
 
 def glasstone_exposure_cal_cm2(yield_kt: float, slant_m: float, transmittance: float,

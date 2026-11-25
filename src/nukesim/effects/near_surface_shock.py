@@ -34,6 +34,7 @@ import numpy as np
 
 from .. import units
 from ..scenario import Burst, Environment, Receiver
+from ..uncertainty import factor
 from . import underwater_shock
 
 X_MIN, X_MAX = -10.0, 15.0     # range of the EM-1 coupling fits (ft/kt^(1/3))
@@ -66,11 +67,13 @@ def coupling(yield_kt: float, x: float) -> float:
     """Coupling coefficient eps for any yield (EM-1 interpolation between 1 and 20 kt)."""
     x = min(max(x, X_MIN), X_MAX)
     if yield_kt <= 1.0:
-        return eps_low(x)
-    if yield_kt >= 20.0:
-        return eps_high(x)
-    el, eh = eps_low(x), eps_high(x)
-    return eh - (yield_kt - 20.0) * (el - eh) / 19.0
+        eps = eps_low(x)
+    elif yield_kt >= 20.0:
+        eps = eps_high(x)
+    else:
+        el, eh = eps_low(x), eps_high(x)
+        eps = eh - (yield_kt - 20.0) * (el - eh) / 19.0
+    return min(1.0, eps * factor("coupling"))
 
 
 def in_regime(burst: Burst) -> bool:
