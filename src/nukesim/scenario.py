@@ -55,6 +55,10 @@ class Environment:
     sound_speed_m_s: float = 1500.0
     surface_pressure_pa: float = units.ATM_TO_PA
     gravity_m_s2: float = 9.80665
+    # weather and time of day (effects/conditions.py); the defaults match the clear-day burn fits
+    visibility: str = "exceptionally_clear"   # see conditions.VISUAL_RANGE_MI
+    overcast: bool = False                    # a cloud layer at about 1,500 m
+    night: bool = False
 
     def hydrostatic_pressure_pa(self, depth_m: float) -> float:
         """Absolute ambient pressure at a given depth below the surface."""
@@ -77,6 +81,7 @@ class Receiver:
     mass_kg: float | None = None         # body mass
     swim_bladder: bool = True            # fish: has a gas-filled swim bladder
     hearing_group: str | None = None     # marine mammals: "LF", "HF", "VHF", "PW", "OW"
+    ship_type: str | None = None         # ships: "small_craft", "destroyer", "carrier"
 
     @property
     def depth_m(self) -> float:

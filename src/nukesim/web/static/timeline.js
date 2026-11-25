@@ -156,8 +156,8 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
   let lastKey = "", pending = null, keyCheck = 0;
   const payload = () => {
     const sc = scenario();
-    return { ...sc, days: tEnd / 86400, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
-      ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })) };
+    return { ...sc, days: tEnd / 86400, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type }) =>
+      ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type })) };
   };
   async function fetchTimeline(body) {
     try {
@@ -338,6 +338,7 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
       if (!rt || !m.material?.color) continue;
       if (m.userData.tlEmissive == null) m.userData.tlEmissive = m.material.emissive?.getHex() ?? 0;
       if (rt.error) continue;
+      if (state.followTimeline === false) { m.material.color.set(levelColor(state.results[m.userData.id])); continue; }
       const arrived = (rt.effects || []).filter((e) => e.onset_s != null && e.onset_s <= t);
       const worst = arrived.reduce((w, e) => Math.max(w, LEVELS.indexOf(e.level)), -1);
       const somethingArrived = arrived.length || (rt.pulse && t >= rt.pulse.arrival_s) || (rt.fallout && t >= rt.fallout.arrival_s);

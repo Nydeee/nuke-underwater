@@ -41,17 +41,21 @@ class BurstIn(BaseModel):
 
 class EnvIn(BaseModel):
     water_depth_m: float | None = Field(None, gt=0, description="None = deep open ocean")
+    visibility: Literal["exceptionally_clear", "very_clear", "clear", "light_haze", "medium_haze", "thin_fog"] = "exceptionally_clear"
+    overcast: bool = False
+    night: bool = False
 
 
 class ReceiverIn(BaseModel):
     id: str
-    kind: Literal["fish", "mammal", "turtle", "diver", "person"]
+    kind: Literal["fish", "mammal", "turtle", "diver", "person", "ship"]
     x_m: float
     y_m: float = 0.0
     z_m: float
     mass_kg: float | None = Field(None, gt=0)
     swim_bladder: bool = True
     hearing_group: Literal["LF", "HF", "VHF", "PW", "OW"] | None = None
+    ship_type: Literal["small_craft", "destroyer", "carrier"] | None = None
 
 
 class Scenario(BaseModel):
@@ -96,12 +100,13 @@ def _burst(b: BurstIn) -> Burst:
 
 
 def _env(e: EnvIn) -> Environment:
-    return Environment(water_depth_m=e.water_depth_m if e.water_depth_m else float("inf"))
+    return Environment(water_depth_m=e.water_depth_m if e.water_depth_m else float("inf"),
+                       visibility=e.visibility, overcast=e.overcast, night=e.night)
 
 
 def _receiver(r: ReceiverIn) -> Receiver:
     return Receiver(r.x_m, r.y_m, r.z_m, kind=r.kind, label=r.id, mass_kg=r.mass_kg,
-                    swim_bladder=r.swim_bladder, hearing_group=r.hearing_group)
+                    swim_bladder=r.swim_bladder, hearing_group=r.hearing_group, ship_type=r.ship_type)
 
 
 def _clean(x):
@@ -288,6 +293,16 @@ def timeline_series(tl: TimelineIn):
     return _clean(build_timeline(b, env, [_receiver(r) for r in tl.receivers], wind_mph=tl.burst.wind_mph,
                                  fission_fraction=tl.burst.fission_fraction, days=tl.days,
                                  max_fireball_radius_m=fireball_radius_m(b.yield_kt, b.z_m)))
+
+
+@app.middleware("http")
+async def _no_stale_files(request, call_next):
+    """Make the browser check for a newer copy of the page's files every time (they change as the app is
+    developed; with heuristic caching the browser can keep running old JavaScript after an update)."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

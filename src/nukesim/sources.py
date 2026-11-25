@@ -17,6 +17,24 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {
+    "tm23_200": Source(
+        key="tm23_200",
+        citation=(
+            "Armed Forces Special Weapons Project (1957, Change 1 1960). Capabilities of Atomic Weapons, "
+            "TM 23-200 / OPNAV 03400.1B. Declassified."
+        ),
+        url="https://archive.org/details/DnaEm1CapabilitiesOfNuclearWeapons",
+        notes=("Table 8-1 (surface-ship peak air overpressure damage criteria, p. 8-2); Figs. 8-1 to 8-3 "
+               "(ship damage ranges vs depth of burst, 1 kt, cube-root scaling, p. 8-5 to 8-8; values read "
+               "off the graphs by hand, about +/-10%); Table 6-5 (dose transmission factors inside ships, p. 6-11)."),
+    ),
+    "dna_em1_1978": Source(
+        key="dna_em1_1978",
+        citation="Defense Nuclear Agency (1978). Capabilities of Nuclear Weapons, DNA-EM-1, Ch. 3 Thermal Radiation Phenomena.",
+        url="https://apps.dtic.mil/sti/citations/ADA955387",
+        notes=("Transmittance for bursts below ~1/4 mile: T = exp(-2.9 R/V) (1 + 1.9 R/V), R slant range, "
+               "V visual range; Table 3-1 probable visual ranges and cloud-layer modifying factors (p. 3-29)."),
+    ),
     "glasstone1977": Source(
         key="glasstone1977",
         citation=(

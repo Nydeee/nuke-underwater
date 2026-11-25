@@ -173,6 +173,9 @@ estimate: Glasstone gives no bubble size, so we use the TNT formula with the sam
 as the shock model. It also ignores the bubble rising and the later pulses (a deep bubble shrinks
 and grows again two or three times). The shock bouncing off the sea floor is not shown.]
 
+#keyidea[Chapter 12 covers what came after: species to choose from, ships, weather and night,
+injuries that follow the timeline, the body view and video recording.]
+
 == The free camera
 
 Both views have a *Free* camera button (or press `F`). It works like the spectator camera in a

@@ -6,6 +6,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { initTimeline } from "./timeline.js";   // time slider (see timeline.js)
 import { makeModel } from "./models.js";
+import { setBase, pose } from "./reactions.js";
+import { createBodyView } from "./bodyview.js";
+import { fmtTime } from "./timeline.js";
+import { SPECIES, speciesOf, speciesIn, GROUPS } from "./species.js";
 import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
 import { createFreecam, createCameraTween } from "./freecam.js";   // WASD free camera, smooth camera moves
 import { units, setSystem, readInput, writeInput, fmtLen, fmtDepth, chartUnits } from "./units.js";
@@ -15,22 +19,18 @@ import { store, toast, attachMenu, closeMenus, openModal, closeModal, anyModalOp
 async function api(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail
+    : Array.isArray(data.detail) ? data.detail.map((d) => `${(d.loc || []).slice(1).join(" › ")}: ${d.msg}`).join("; ") : "the server could not handle this request");
   return data;
 }
 
 // ---------------------------------------------------------------- state
 const LEVEL_COLORS = { none: "#6fbf73", possible: "#e6cf5a", likely: "#f0a23c", severe: "#e2552c", lethal: "#a51818" };
 const LEVELS = ["none", "possible", "likely", "severe", "lethal"];
-const PRESETS = {
-  fish:    { kind: "fish", label: "Fish", emoji: "🐟", mass_kg: 0.5, swim_bladder: true, z_m: -10 },
-  whale:   { kind: "mammal", label: "Whale", emoji: "🐋", mass_kg: 20000, hearing_group: "LF", z_m: -30 },
-  dolphin: { kind: "mammal", label: "Dolphin", emoji: "🐬", mass_kg: 150, hearing_group: "HF", z_m: -10 },
-  turtle:  { kind: "turtle", label: "Turtle", emoji: "🐢", mass_kg: 50, z_m: -5 },
-  diver:   { kind: "diver", label: "Diver", emoji: "🤿", mass_kg: 75, z_m: -10 },
-  boat:    { kind: "person", label: "Person on a boat", emoji: "🚤", z_m: 2 },
-};
+const PRESETS = SPECIES;   // what you can add (species.js)
+const onSurface = (r) => r.kind === "person" || r.kind === "ship";   // on (or in) a boat, not in the water
 const state = { receivers: [], selected: null, results: {}, nextId: 1, overlay: null };
+let timeline = null;   // set up near the end (timeline.js)
 const $ = (id) => document.getElementById(id);
 
 function scenario() {
@@ -43,7 +43,8 @@ function scenario() {
       fission_fraction: Math.min(Math.max(parseFloat($("fission").value) / 100, 0.01), 1),
       wind_mph: readInput($("wind")) || 15,
     },
-    env: { water_depth_m: $("deepOcean").checked ? null : readInput($("waterDepth")) },
+    env: { water_depth_m: $("deepOcean").checked ? null : readInput($("waterDepth")),
+      visibility: $("visibility").value, overcast: $("overcast").checked, night: $("timeOfDay").value === "night" },
   };
 }
 const view = () => ({ R: (readInput($("maxRange")) || 3) * 1000, D: readInput($("maxDepth")) || 100, s: parseFloat($("stretch").value) });
@@ -195,15 +196,18 @@ function buildStatic() {
 function receiverMesh(r) {
   const { R } = view();
   const big = r.kind === "mammal" && (r.preset === "whale" || (r.mass_kg ?? 0) > 1000);
-  const size = (R / 1000) * (big ? 0.07 : r.kind === "person" ? 0.06 : 0.045);   // icon size, not to scale
-  const color = levelColor(state.results[r.id]);
+  const size = (R / 1000) * (r.kind === "ship" ? 0.1 : big ? 0.07 : onSurface(r) ? 0.06 : 0.045);   // icon size, not to scale
+  const color = colorOf(r);
   const m = makeModel(r, color);
   m.scale.setScalar(size);
+  m.userData.size = size;
+  m.userData.floatTo = onSurface(r) ? null : toY(-0.3) - size * 0.15;
   m.rotation.y = Math.PI;   // face ground zero
   if (r.id === state.selected) m.material.emissive?.setHex(0x335577);
-  m.position.set(r.x_m / 1000, toY(r.z_m) + (r.kind === "person" ? size * 0.05 : 0), 0);
+  m.position.set(r.x_m / 1000, toY(r.z_m) + (onSurface(r) ? size * 0.05 : 0), 0);
   m.userData.id = r.id;
   m.traverse((o) => { o.userData.id = r.id; });
+  setBase(m);
   return m;
 }
 
@@ -257,7 +261,7 @@ renderer.domElement.addEventListener("pointermove", (ev) => {
   const r = state.receivers.find((x) => x.id === dragging);
   const { R, D } = view();
   r.x_m = Math.min(Math.max(p.x * 1000, 0), R);
-  if (r.kind === "person") r.z_m = 2;
+  if (onSurface(r)) r.z_m = 2;
   else {
     const wd = scenario().env.water_depth_m;
     const maxDepth = Math.min(D, wd ? wd - 0.5 : D);
@@ -265,7 +269,23 @@ renderer.domElement.addEventListener("pointermove", (ev) => {
   }
   const mesh = receiverGroup.children.find((m) => m.userData.id === dragging);
   mesh.position.set(r.x_m / 1000, toY(r.z_m), 0);
+  setBase(mesh);
   renderList();
+});
+// realistic view: a click (not a drag) on a pin or model selects it
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (ev) => { downAt = [ev.clientX, ev.clientY]; });
+renderer.domElement.addEventListener("click", (ev) => {
+  if (mode !== "realistic" || freecam.active || !downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const id = realistic.pick(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1));
+  if (id) select(id);
+});
+renderer.domElement.addEventListener("pointermove", (ev) => {   // hand cursor over things you can click
+  if (mode !== "realistic" || freecam.active || ev.buttons) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const id = realistic.pick(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1));
+  renderer.domElement.style.cursor = id ? "pointer" : "";
 });
 window.addEventListener("pointerup", () => {
   if (dragging) { dragging = null; controls.enabled = true; scheduleAssess(); }
@@ -273,12 +293,12 @@ window.addEventListener("pointerup", () => {
 
 // ---------------------------------------------------------------- receivers list and report
 function addReceiver(preset) {
-  const p = PRESETS[preset];
+  const p = speciesOf(preset);
   const id = `${preset}-${state.nextId++}`;
   const { R } = view();
   state.receivers.push({ id, preset, kind: p.kind, label: `${p.label} ${state.nextId - 1}`, emoji: p.emoji,
     x_m: R * (0.2 + 0.6 * Math.random()), y_m: 0, z_m: p.z_m, mass_kg: p.mass_kg ?? null,
-    swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null });
+    swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null, ship_type: p.ship_type ?? null });
   state.selected = id;
   buildReceivers(); renderList(); scheduleAssess();
 }
@@ -289,27 +309,41 @@ function renderList() {
   for (const r of state.receivers) {
     const li = document.createElement("li");
     if (r.id === state.selected) li.className = "selected";
-    const color = levelColor(state.results[r.id]);
-    const where = r.kind === "person" ? "on deck" : `${fmtDepth(-r.z_m)} deep`;
+    const color = colorOf(r);
+    const where = onSurface(r) ? (r.kind === "ship" ? "on the surface" : "on deck") : `${fmtDepth(-r.z_m)} deep`;
     li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${esc(r.emoji)} ${esc(r.label)}</span>
       <button class="del" title="Remove (Delete)">✕</button></div>
       <div class="hint">${fmtLen(r.x_m)} out, ${where}</div>`;
-    if (r.kind !== "person") {
+    {
       const props = document.createElement("div");
       props.className = "props";
-      props.innerHTML = `<label>mass (kg)<input type="number" min="0.001" step="any" value="${r.mass_kg ?? ""}"></label>` +
-        (r.kind === "fish" ? `<label class="check"><input type="checkbox" ${r.swim_bladder ? "checked" : ""}> swim bladder</label>` : "") +
-        (r.kind === "mammal" ? `<label>hearing<select>${["LF", "HF", "VHF", "PW", "OW"].map((g) => `<option ${g === r.hearing_group ? "selected" : ""}>${g}</option>`).join("")}</select></label>` : "");
-      props.querySelector("input[type=number]").addEventListener("change", (e) => { r.mass_kg = parseFloat(e.target.value) || null; buildReceivers(); scheduleAssess(); });
-      props.querySelector("input[type=checkbox]")?.addEventListener("change", (e) => { r.swim_bladder = e.target.checked; scheduleAssess(); });
-      props.querySelector("select")?.addEventListener("change", (e) => { r.hearing_group = e.target.value; scheduleAssess(); });
+      const sp = speciesOf(r.preset), same = sp ? speciesIn(sp.group) : [];
+      const spSel = same.length > 1 ? `<label class="wide">${onSurface(r) ? "vessel" : "species"}<select class="spSel">${same.map(([k, x]) => `<option value="${k}" ${speciesOf(k) === sp ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></label>` : "";
+      props.innerHTML = spSel + (onSurface(r) ? "" : `<label>mass (kg)<input class="massIn" type="number" min="0.001" step="any" value="${r.mass_kg ?? ""}"></label>`) +
+        (r.kind === "fish" ? `<label class="check"><input class="sbIn" type="checkbox" ${r.swim_bladder ? "checked" : ""}> swim bladder</label>` : "") +
+        (r.kind === "mammal" ? `<label>hearing<select class="hgSel">${["LF", "HF", "VHF", "PW", "OW"].map((g) => `<option ${g === r.hearing_group ? "selected" : ""}>${g}</option>`).join("")}</select></label>` : "");
+      props.querySelector(".massIn")?.addEventListener("change", (e) => { r.mass_kg = parseFloat(e.target.value) || null; buildReceivers(); scheduleAssess(); });
+      props.querySelector(".spSel")?.addEventListener("change", (e) => changeSpecies(r, e.target.value));
+      props.querySelector(".sbIn")?.addEventListener("change", (e) => { r.swim_bladder = e.target.checked; scheduleAssess(); });
+      props.querySelector(".hgSel")?.addEventListener("change", (e) => { r.hearing_group = e.target.value; scheduleAssess(); });
       props.addEventListener("click", (e) => e.stopPropagation());
-      li.appendChild(props);
+      if (props.innerHTML.trim()) li.appendChild(props);
     }
     li.querySelector(".del").addEventListener("click", (e) => { e.stopPropagation(); removeReceiver(r.id); });
     li.addEventListener("click", () => select(r.id));
     ul.appendChild(li);
   }
+}
+
+// switch an animal to another species of the same group (keeps where it is)
+function changeSpecies(r, key) {
+  const p = SPECIES[key];
+  const oldLabel = speciesOf(r.preset)?.label;
+  Object.assign(r, { preset: key, kind: p.kind, emoji: p.emoji, mass_kg: p.mass_kg ?? null, swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null, ship_type: p.ship_type ?? null });
+  if (oldLabel && r.label.startsWith(oldLabel)) r.label = p.label + r.label.slice(oldLabel.length);
+  if (p.note) toast(p.note);
+  buildReceivers(); renderList(); scheduleAssess();
+  if (mode === "realistic") realistic.rebuildReceivers();
 }
 
 let lastRemoved = null;
@@ -331,6 +365,38 @@ function undoRemove() {
 }
 
 // Colour: the most likely outcome when uncertainty is shown, otherwise the single best-estimate outcome.
+// ---- body view (bodyview.js)
+let bodyView = null;
+function openBodyView(id) {
+  bodyView ??= createBodyView({
+    getReceiver: (x) => state.receivers.find((r) => r.id === x), getResult: (x) => state.results[x],
+    getTimelineEntry: tlOf, getTime: () => timeline.getTime(), following: followTL,
+  });
+  bodyView.open(id);
+}
+
+// ---- what has happened so far (the timeline): used by the report, the list and the colours
+const NOT_YET = "#9aa8b6";
+const followTL = () => $("followTL").checked && !!timeline?.getData();
+function tlOf(id) { return (timeline?.getData()?.receivers || []).find((x) => x.id === id) || null; }
+function worstSoFar(id) {
+  const rt = tlOf(id), t = timeline.getTime();
+  if (!rt || rt.error) return undefined;
+  let w = -1;
+  for (const e of rt.effects || []) if (e.onset_s != null && e.onset_s <= t) w = Math.max(w, LEVELS.indexOf(e.level));
+  return w >= 0 ? LEVELS[w] : null;   // null = nothing has reached it yet
+}
+function colorOf(r) {
+  if (!followTL()) return levelColor(state.results[r.id]);
+  const w = worstSoFar(r.id);
+  return w === undefined ? levelColor(state.results[r.id]) : w === null ? NOT_YET : LEVEL_COLORS[w];
+}
+function statusKey() {   // changes whenever something visible in the report or list should change
+  if (!followTL()) return "final";
+  const t = timeline.getTime();
+  return state.receivers.map((r) => { const rt = tlOf(r.id); return (rt?.effects || []).map((e) => (e.onset_s != null && e.onset_s <= t ? 1 : 0)).join(""); }).join("|");
+}
+
 function levelColor(res) {
   if (!res || !res.worst) return "#9aa8b6";
   return LEVEL_COLORS[res.uncertain ? res.uncertain.most_likely : res.worst];
@@ -347,6 +413,9 @@ const fmtNum = (v) => (v == null ? "–" : Math.abs(v) >= 1000 || (Math.abs(v) <
 function select(id) {
   state.selected = id;
   buildReceivers(); renderList(); renderReport(); loadFallout();
+  if (mode === "realistic") realistic.rebuildReceivers();
+  if (bodyView?.openId && id) bodyView.open(id);
+  document.querySelector("#receiverList li.selected")?.scrollIntoView({ block: "nearest" });
 }
 
 
@@ -359,17 +428,28 @@ function renderReport() {
   if (res.error) { box.innerHTML = `<p class="error">${esc(res.error)}</p>`; return; }
   const u = res.uncertain;
   const expert = detail === "expert";
-  const where = r.kind === "person" ? "on deck" : `${fmtDepth(-r.z_m)} deep`;
+  const where = onSurface(r) ? (r.kind === "ship" ? "on the surface" : "on deck") : `${fmtDepth(-r.z_m)} deep`;
+  const follow = followTL(), rt = follow ? tlOf(r.id) : null, t = timeline.getTime();
+  const onset = (name) => rt?.effects?.find((x) => x.name === name)?.onset_s ?? null;
+  const happened = (name) => !rt || (onset(name) != null && onset(name) <= t);
+  const sofar = rt ? worstSoFar(r.id) : res.worst;
   let html = `<div class="summaryCard"><div class="big">${esc(r.emoji)} ${esc(r.label)}</div>
     <div class="help">${fmtLen(r.x_m)} from ground zero, ${where}</div>
-    <div style="margin-top:6px">Worst effect: <span class="level lv-${res.worst}">${res.worst}</span>
+    <div style="margin-top:6px">${rt ? `At ${esc(fmtTime(t))}: ${sofar ? `<span class="level lv-${sofar}">${sofar}</span>` : `<span class="tl-pending">nothing yet</span>`}
+      <span class="help inline">· in the end: <span class="level lv-${res.worst}">${res.worst}</span></span>`
+      : `Worst effect: <span class="level lv-${res.worst}">${res.worst}</span>`}
     ${u ? ` · most likely: <span class="level lv-${u.most_likely}">${u.most_likely}</span>` : ""}</div>
-    ${u ? `${probBar(u.level_probs)}<div class="help">chance of each worst outcome over ${u.n} runs</div>` : ""}</div>`;
-  for (const e of res.effects) {
+    ${u ? `${probBar(u.level_probs)}<div class="help">chance of each worst outcome over ${u.n} runs</div>` : ""}
+    <button class="bodyBtn" id="bodyBtn" title="See where on the body each injury is">🩻 Body view</button></div>`;
+  // in time order when following the timeline: an injury log
+  const effects = rt ? [...res.effects].sort((a, b) => (onset(a.name) ?? 1e12) - (onset(b.name) ?? 1e12)) : res.effects;
+  for (const e of effects) {
     const ue = u && u.effects.find((x) => x.name === e.name);
     const range = ue && ue.p05 != null ? `<div class="range">likely range (5–95%): ${fmtNum(ue.p05)} – ${fmtNum(ue.p95)} ${esc(ue.unit)}</div>${expert ? probBar(ue.level_probs) : ""}` : "";
-    html += `<div class="effect"><span class="level lv-${e.level}">${e.level}</span> <b>${esc(e.name)}</b>
-      <div class="val">${esc(e.value)}</div>${range}
+    const on = onset(e.name), done = happened(e.name);
+    const when = rt && on != null ? `<span class="when">${done ? "at" : "arrives at"} ${esc(fmtTime(on))}</span>` : "";
+    html += `<div class="effect ${done ? "" : "pending"}">${done ? `<span class="level lv-${e.level}">${e.level}</span>` : `<span class="tl-pending">not yet</span>`} <b>${esc(e.name)}</b>${when}
+      ${done ? `<div class="val">${esc(e.value)}</div>${range}` : ""}
       <div class="src">${expert ? `${esc(e.criterion)} · source: ${esc(e.source)}` : `threshold: ${esc(e.criterion)}`}</div></div>`;
   }
   if (res.long_term) {
@@ -383,6 +463,7 @@ function renderReport() {
   if (notes.length) html += `<details ${expert ? "open" : ""}><summary>Assumptions &amp; warnings (${notes.length})</summary>
     <ul class="notes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>`;
   box.innerHTML = html;
+  $("bodyBtn")?.addEventListener("click", () => openBodyView(r.id));
   $("resultsHint").hidden = true;
 }
 
@@ -396,8 +477,8 @@ async function runAssess() {
   setStatus("Calculating…", true);
   try {
     const unc = $("uncertainty").checked;
-    const data = await api("/api/assess", { ...sc, uncertainty: unc, n_samples: parseInt($("nSamples").value) || 200, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
-      ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })) });
+    const data = await api("/api/assess", { ...sc, uncertainty: unc, n_samples: parseInt($("nSamples").value) || 200, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type }) =>
+      ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type })) });
     state.results = Object.fromEntries(data.receivers.map((x) => [x.id, x]));
     setStatus(`Up to date · ${state.receivers.length} in the sea`);
     if (mode === "realistic") realistic.rebuildReceivers();
@@ -552,8 +633,8 @@ async function loadFallout() {
     return;
   }
   try {
-    const { id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group } = r;
-    const d = await api("/api/fallout", { ...sc, receiver: { id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }, days: 30 });
+    const { id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type } = r;
+    const d = await api("/api/fallout", { ...sc, receiver: { id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group, ship_type }, days: 30 });
     const days = d.times_h.map((t) => t / 24);
     const series = [{ x: days, y: d.total_high_ugy_h, color: "#f0a23c" }, { x: days, y: d.total_low_ugy_h, color: "#f0a23c", dash: [4, 3] }];
     if (d.internal_high_ugy_h) series.push({ x: days, y: d.internal_high_ugy_h, color: "#e2552c", width: 1 });
@@ -563,7 +644,21 @@ async function loadFallout() {
 }
 
 // ---------------------------------------------------------------- wiring
-document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addReceiver(b.dataset.add)));
+// "add" buttons: one per group; groups with several species open a list to choose from
+(function buildAddButtons() {
+  const box = $("addButtons");
+  box.innerHTML = "";
+  for (const gr of GROUPS) {
+    const list = speciesIn(gr.key), b = document.createElement("button");
+    b.innerHTML = `${gr.emoji} ${gr.label}${list.length > 1 ? " ▾" : ""}`;
+    b.title = list.length > 1 ? `Add: ${list.map(([, x]) => x.label).join(", ")}` : `Add a ${gr.label.toLowerCase()}`;
+    box.appendChild(b);
+    if (list.length > 1) attachMenu(b, () => list.map(([k, x]) => ({ icon: x.emoji, label: `${x.label}`, kbd: x.mass_kg ? (x.mass_kg >= 1000 ? `${x.mass_kg / 1000} t` : `${x.mass_kg} kg`) : "", action: () => addReceiver(k) })));
+    else b.addEventListener("click", () => addReceiver(list[0][0]));
+  }
+})();
+const conditions = () => ({ tod: $("timeOfDay").value, visibility: $("visibility").value, overcast: $("overcast").checked });
+["timeOfDay", "visibility", "overcast"].forEach((id) => $(id).addEventListener("change", () => { realistic.setConditions(conditions()); refreshScenario(); }));
 ["yield", "yieldUnit", "side", "burstDist", "fission", "wind", "waterDepth"].forEach((id) => $(id).addEventListener("change", () => { $("presetSel").value = ""; refreshScenario(); }));
 $("deepOcean").addEventListener("change", () => { $("waterDepth").disabled = $("deepOcean").checked; refreshScenario(); });
 ["maxRange", "maxDepth"].forEach((id) => $(id).addEventListener("change", () => { state.overlay = null; $("legend").innerHTML = ""; buildStatic(); buildReceivers(); frameCamera(); }));
@@ -580,7 +675,7 @@ function setStatus(text, busy = false) {
 }
 
 // ---------------------------------------------------------------- preferences (this browser only)
-const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "basic" },
+const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "basic", reactions: true, followTL: true },
   store.get("prefs", {}));
 const savePrefs = () => store.set("prefs", prefs);
 
@@ -702,6 +797,7 @@ function serialize() {
     burst: { yield: +$("yield").value, unit: +$("yieldUnit").value, side: $("side").value, dist_m: readInput($("burstDist")),
       wind_mph: readInput($("wind")), fission_pct: +$("fission").value },
     sea: { deep: $("deepOcean").checked, depth_m: readInput($("waterDepth")) },
+    conditions: conditions(),
     view: { range_km: readInput($("maxRange")), depth_m: readInput($("maxDepth")), stretch: +$("stretch").value, mode, detail },
     uncertainty: $("uncertainty").checked, runs: +$("nSamples").value,
     receivers: state.receivers.map(({ preset, kind, label, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
@@ -722,15 +818,21 @@ function applySaved(o) {
   writeInput($("maxRange"), num(v.range_km, 0.1, 1000, 3)); writeInput($("maxDepth"), num(v.depth_m, 1, 11000, 100));
   $("stretch").value = num(v.stretch, 5, 100, 35); $("stretchVal").textContent = `${$("stretch").value}%`;
   $("uncertainty").checked = !!o.uncertainty; $("nSamples").value = num(o.runs, 20, 2000, 200);
+  const cd = o.conditions || {};
+  $("timeOfDay").value = ["day", "dawn", "dusk", "night"].includes(cd.tod) ? cd.tod : "day";
+  $("visibility").value = [...$("visibility").options].some((x) => x.value === cd.visibility) ? cd.visibility : "exceptionally_clear";
+  $("overcast").checked = !!cd.overcast;
+  realistic.setConditions(conditions());
   state.receivers = []; state.results = {}; state.nextId = 1;
   for (const r of o.receivers || []) {
-    const p = PRESETS[r.preset];
+    const p = speciesOf(r.preset);
     if (!p) continue;
     const id = `${r.preset}-${state.nextId++}`;
     state.receivers.push({ id, preset: r.preset, kind: p.kind, label: String(r.label || `${p.label} ${state.nextId - 1}`).slice(0, 60), emoji: p.emoji,
-      x_m: num(r.x_m, 0, 1e7, 1000), y_m: num(r.y_m, -1e7, 1e7, 0), z_m: p.kind === "person" ? 2 : num(r.z_m, -11000, -0.3, p.z_m),
+      x_m: num(r.x_m, 0, 1e7, 1000), y_m: num(r.y_m, -1e7, 1e7, 0), z_m: (p.kind === "person" || p.kind === "ship") ? 2 : num(r.z_m, -11000, -0.3, p.z_m),
       mass_kg: r.mass_kg == null ? p.mass_kg ?? null : num(r.mass_kg, 0.001, 2e5, p.mass_kg ?? null),
-      swim_bladder: r.swim_bladder !== false, hearing_group: ["LF", "HF", "VHF", "PW", "OW"].includes(r.hearing_group) ? r.hearing_group : p.hearing_group ?? null });
+      swim_bladder: r.swim_bladder !== false, hearing_group: ["LF", "HF", "VHF", "PW", "OW"].includes(r.hearing_group) ? r.hearing_group : p.hearing_group ?? null,
+      ship_type: p.ship_type ?? null });
   }
   state.selected = state.receivers[0]?.id ?? null;
   $("presetSel").value = "";
@@ -822,7 +924,7 @@ function resultsCSV() {
     ["thing", "kind", "distance_m", "depth_m", "worst", "effect", "level", "value", "threshold", "source"]];
   for (const r of state.receivers) {
     const res = state.results[r.id];
-    for (const e of res?.effects || [{}]) rows.push([r.label, r.kind, Math.round(r.x_m), r.kind === "person" ? 0 : +(-r.z_m).toFixed(1), res?.worst ?? "", e.name, e.level, e.value, e.criterion, e.source]);
+    for (const e of res?.effects || [{}]) rows.push([r.label, r.kind, Math.round(r.x_m), onSurface(r) ? 0 : +(-r.z_m).toFixed(1), res?.worst ?? "", e.name, e.level, e.value, e.criterion, e.source]);
   }
   download(`nukesim-results-${stamp()}.csv`, rows.map((row) => row.map(q).join(",")).join("\n"), "text/csv");
   toast("Results table saved to your downloads", { kind: "ok" });
@@ -831,8 +933,36 @@ function resultsJSON() {
   download(`nukesim-results-${stamp()}.json`, JSON.stringify({ scenario: serialize(), burst: info, results: state.results }, null, 2));
   toast("Full results saved to your downloads", { kind: "ok" });
 }
+// ---- video: records the 3D view (whatever the camera shows) to a video file
+let rec = null;
+function toggleRecording(fromStart = false) {
+  if (rec) { rec.mr.stop(); return; }
+  if (typeof MediaRecorder === "undefined" || !renderer.domElement.captureStream) { toast("This browser can't record video.", { kind: "err" }); return; }
+  const mime = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const mr = new MediaRecorder(renderer.domElement.captureStream(30), mime ? { mimeType: mime, videoBitsPerSecond: 10e6 } : undefined);
+  const chunks = [], t0 = performance.now();
+  mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    clearInterval(rec.timer); $("recBadge").hidden = true; rec = null;
+    const type = mr.mimeType || "video/webm", ext = type.includes("mp4") ? "mp4" : "webm";
+    download(`nukesim-${stamp()}.${ext}`, new Blob(chunks, { type }));
+    toast(`Video saved to your downloads (${ext.toUpperCase()})`, { kind: "ok" });
+  };
+  rec = { mr, fromStart, timer: setInterval(() => {
+    const s = Math.round((performance.now() - t0) / 1000);
+    $("recBadge").querySelector(".t").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    if (rec.fromStart && timeline.isAtEnd()) rec.mr.stop();   // the whole event has played
+  }, 250) };
+  $("recBadge").hidden = false;
+  if (fromStart) { timeline.setTime(0); timeline.play(); }
+  mr.start(500);
+}
+$("recStop").addEventListener("click", () => toggleRecording());
+
 attachMenu($("exportBtn"), () => [
   { icon: "🖼", label: "Picture of the 3D view (PNG)", kbd: "P", action: screenshot },
+  { icon: "🎬", label: rec ? "Stop recording" : "Record video of the 3D view", kbd: "V", action: () => toggleRecording() },
+  { icon: "💥", label: "Record the whole event from the flash", action: () => toggleRecording(true), disabled: !!rec },
   { icon: "▦", label: "Results table (CSV, for Excel)", action: resultsCSV, disabled: !state.receivers.length },
   { icon: "{ }", label: "Full results (JSON)", action: resultsJSON },
 ]);
@@ -873,6 +1003,8 @@ function setQuality(q) {
 }
 document.querySelectorAll("#qualitySeg button").forEach((b) => b.addEventListener("click", () => setQuality(b.dataset.quality)));
 $("autoPlay").addEventListener("change", (e) => { prefs.autoPlay = e.target.checked; savePrefs(); });
+$("reactions").addEventListener("change", (e) => { prefs.reactions = e.target.checked; savePrefs(); });
+$("followTL").addEventListener("change", (e) => { prefs.followTL = e.target.checked; savePrefs(); state.followTimeline = e.target.checked; lastStatusKey = null; });
 $("showPins").addEventListener("change", (e) => { prefs.pins = e.target.checked; savePrefs(); realistic.setPins(prefs.pins); });
 $("resetPrefs").addEventListener("click", () => {
   const saved = savedList();
@@ -927,6 +1059,7 @@ window.addEventListener("keydown", (e) => {
   if (mod || e.altKey) return;
   if (e.key === "Escape") {
     closeMenus();
+    bodyView?.close();
     document.querySelectorAll(".modal").forEach((m) => { m.hidden = true; });
     return;
   }
@@ -945,6 +1078,7 @@ window.addEventListener("keydown", (e) => {
     case "[": togglePanel("left"); break;
     case "]": togglePanel("right"); break;
     case "p": case "P": screenshot(); break;
+    case "v": case "V": toggleRecording(); break;
     case "?": openModal("shortcutsModal"); break;
     case "Delete": case "Backspace": if (state.selected) { removeReceiver(state.selected); e.preventDefault(); } break;
     default:
@@ -960,25 +1094,36 @@ $("presetSel").addEventListener("change", (e) => { applyScenario(e.target.value)
 layoutPanels();
 applyQuality(prefs.quality);
 document.querySelectorAll("#qualitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.quality === prefs.quality));
-$("autoPlay").checked = prefs.autoPlay; $("showPins").checked = prefs.pins;
+$("autoPlay").checked = prefs.autoPlay; $("reactions").checked = prefs.reactions; $("followTL").checked = prefs.followTL; state.followTimeline = prefs.followTL; $("showPins").checked = prefs.pins;
 writeInput($("wind"), 15);            // canonical wind is 15 mph, shown in the chosen units
 if (prefs.units !== "metric") applyUnits(prefs.units);
 resize();
 frameCamera();
 // ---------------------------------------------------------------- timeline hook (everything else is in timeline.js)
-const timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
-realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info });
+timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
+realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info, colorOf, reactionsOn: () => prefs.reactions });
 realistic.setPins(prefs.pins);
+realistic.setConditions(conditions());
 $("viewNotes").innerHTML = realistic.notes.map((n) => `<li>${esc(n)}</li>`).join("");
 setDetail(prefs.detail);
 buildCamBar();
 resize();
-let lastFrame = performance.now();
+let lastFrame = performance.now(), lastStatusKey = null;
+// "?pump" in the address keeps drawing even when the browser pauses animation for a hidden tab (for testing)
+const nextFrame = location.search.includes("pump") ? (cb) => setTimeout(() => cb(performance.now()), 33) : (cb) => requestAnimationFrame(cb);
 (function loop() {
-  requestAnimationFrame(loop);
+  nextFrame(loop);
   const now = performance.now(), dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
   timeline.update();
+  // the report and list follow the timeline: redraw when an injury happens (or un-happens when scrubbing back)
+  const sk = statusKey() + state.selected;
+  if (sk !== lastStatusKey) { lastStatusKey = sk; renderReport(); renderList(); bodyView?.refresh(); }
+  if (mode === "technical") {
+    const byId = Object.fromEntries((timeline.getData()?.receivers || []).map((x) => [x.id, x]));
+    for (const m of receiverGroup.children) if (m.userData.base && !dragging)
+      pose(m, followTL() ? byId[m.userData.id] : null, timeline.getTime(), { on: prefs.reactions, scale: m.userData.size, awayX: 1 });
+  }
   freecam.update(dt);
   if (mode === "realistic") { realistic.update(); renderer.render(realistic.scene, realistic.camera); }
   else { if (controls.enabled) { techTween.update(); controls.update(); } renderer.render(scene, camera); }
@@ -991,7 +1136,7 @@ if (location.hash.startsWith("#s=")) {
   catch (err) { toast(`That link could not be opened: ${err.message}`, { kind: "err" }); }
 }
 if (!opened) {
-  addReceiver("fish");
+  addReceiver("cod");
   addReceiver("dolphin");
   addReceiver("boat");
   refreshScenario();

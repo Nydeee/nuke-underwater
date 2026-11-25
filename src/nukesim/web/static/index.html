@@ -66,6 +66,23 @@
     </details>
 
     <details open>
+      <summary>🌤 Conditions</summary>
+      <label title="Changes the look; at night the flash blinds people much farther away">Time of day
+        <select id="timeOfDay"><option value="day">Day</option><option value="dawn">Dawn</option><option value="dusk">Dusk</option><option value="night">Night</option></select></label>
+      <label title="Haze and fog absorb part of the heat (DNA EM-1)">Visibility
+        <select id="visibility">
+          <option value="exceptionally_clear">Exceptionally clear (50 mi): as the burn formula assumes</option>
+          <option value="very_clear">Very clear (32 mi)</option>
+          <option value="clear">Clear (16 mi)</option>
+          <option value="light_haze">Light haze (8 mi)</option>
+          <option value="medium_haze">Medium haze (4 mi)</option>
+          <option value="thin_fog">Thin fog (1.5 mi)</option>
+        </select></label>
+      <label class="check" title="A cloud layer at about 1,500 m: reflects heat down if the burst is below it, blocks most of it if above"><input id="overcast" type="checkbox"> Overcast (cloud layer at about 1.5 km)</label>
+      <span class="help">Haze, fog and clouds change the burns; night makes flash blindness reach much farther (dawn and dusk count as day).</span>
+    </details>
+
+    <details open>
       <summary>🐟 Things in the sea</summary>
       <div class="buttons" id="addButtons">
         <button data-add="fish" title="Add a fish">🐟 Fish</button>
@@ -106,6 +123,7 @@
     <div id="camBar"></div>
     <div id="uwHud" hidden><span class="uwIcon">≋</span> Underwater · <b>0 m</b> deep</div>
     <div id="flyHint" hidden></div>
+    <div id="recBadge" hidden><span class="dotRec"></span> REC <span class="t">0:00</span> <button id="recStop">Stop</button></div>
     <div id="status"><span class="spin"></span><span class="txt">Loading…</span></div>
     <button class="edgeTab left" id="toggleLeft" title="Hide / show the setup panel ([)">‹</button>
     <button class="edgeTab right" id="toggleRight" title="Hide / show the results panel (])">›</button>
@@ -116,7 +134,8 @@
   <aside id="results">
     <div class="resultsHead">
       <h2>Results</h2>
-      <label class="check small" title="Run the models many times with their uncertain inputs varied"><input id="uncertainty" type="checkbox"> Show uncertainty</label>
+      <label class="check small" title="Show only the injuries that have happened by the time on the timeline"><input id="followTL" type="checkbox" checked> Follow timeline</label>
+      <label class="check small" title="Run the models many times with their uncertain inputs varied"><input id="uncertainty" type="checkbox"> Uncertainty</label>
       <label class="small expert" title="Number of Monte Carlo runs">runs <input id="nSamples" type="number" min="20" max="2000" value="200" style="width:64px"></label>
     </div>
     <p class="help" id="resultsHint">Click something in the sea (or in the list) to see what happens to it.</p>
@@ -177,6 +196,7 @@
         <span><kbd>⌘/Ctrl</kbd> <kbd>Z</kbd></span><span>undo removing it</span>
         <span><kbd>⌘/Ctrl</kbd> <kbd>S</kbd></span><span>save the scenario</span>
         <span><kbd>P</kbd></span><span>save a picture of the scene</span>
+        <span><kbd>V</kbd></span><span>start / stop recording a video</span>
         <span><kbd>?</kbd></span><span>this list</span>
       </div>
       <div class="cardButtons"><span style="flex:1"></span><button class="primary" data-close="shortcutsModal">Close</button></div>
@@ -203,6 +223,7 @@
       </div>
       <label class="check"><input id="autoPlay" type="checkbox" checked> Play the timeline when switching to the realistic view</label>
       <label class="check"><input id="showPins" type="checkbox" checked> Show marker pins in the realistic view</label>
+      <label class="check"><input id="reactions" type="checkbox" checked> Animate injuries on the 3D models (a jolt when the blast hits, badly hurt animals roll over, burned skin darkens; illustrative)</label>
       <div class="cardButtons">
         <button id="resetPrefs" class="ghost" title="Forget layout, units and preferences (saved scenarios are kept)">Reset layout &amp; preferences</button>
         <span style="flex:1"></span><button class="primary" data-close="settingsModal">Done</button>

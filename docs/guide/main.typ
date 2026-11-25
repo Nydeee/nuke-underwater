@@ -17,5 +17,6 @@
 #include "ch09_using_the_app.typ"
 #include "ch10_uncertainty.typ"
 #include "ch11_timeline.typ"
+#include "ch12_ships_weather_bodies.typ"
 #include "glossary.typ"
 #include "references.typ"

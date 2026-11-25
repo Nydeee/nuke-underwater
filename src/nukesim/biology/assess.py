@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .. import units
-from ..effects import air_blast, air_to_water, near_surface_shock, radiation_shielding, thermal, underwater_shock
+from ..effects import air_blast, air_to_water, conditions, near_surface_shock, radiation_shielding, ships, thermal, underwater_shock
 from ..scenario import Burst, Environment, Receiver
 from ..uncertainty import pick
 from . import criteria as c
@@ -125,6 +125,9 @@ def _fish(burst, rec, env, a: Assessment):
         win = _window(vol, rec.depth_m, cut, env)
         imp = _windowed_impulse(t, p, win)
         ld50 = c.fish_ld50_impulse_pa_s(m)
+        if not 0.00002 <= m <= 0.744:
+            a.notes.append(f"Fish mass {m:g} kg is outside the range of Yelverton's tests (0.02 g to 744 g); "
+                           "the swim-bladder LD50 is extrapolated from our power-law fit.")
         lvl = "lethal" if imp >= ld50 else ("likely" if imp >= 0.5 * ld50 else "none")
         a.effects.append(Effect(
             "blast (impulse on swim bladder)", lvl,
@@ -184,7 +187,7 @@ def _diver(burst, rec, env, a: Assessment):
         imp, "Pa-s"))
 
 
-def _deck(burst, rec, env, a: Assessment):
+def _deck(burst, rec, env, a: Assessment, prefix: str = ""):
     if burst.z_m < 0:
         a.notes.append("Air blast above an underwater burst is not modelled yet.")
         return
@@ -198,32 +201,79 @@ def _deck(burst, rec, env, a: Assessment):
         if eff_psi >= thr:
             lvl, what = l, txt
     a.effects.append(Effect(
-        "blast (standing in the open)", lvl,
+        prefix + "blast (standing in the open)", lvl,
         f"{eff_psi:.3g} psi effective ({p * units.PA_TO_PSI:.3g} overpressure + {q * units.PA_TO_PSI:.3g} dynamic): {what}",
         "Table 12.38 (long-duration pulses); effective = overpressure + dynamic pressure (sec. 12.32)", "glasstone1977",
         eff_psi, "psi"))
     a.notes.append("Being thrown by the blast, flying debris and falling overboard are not modelled.")
 
 
-def _burns(burst, rec, env, a: Assessment):
+def burn_level(q: float, b: dict) -> str:
+    """Burn level for an exposure q (cal/cm2): severe = 2nd degree; likely = 1st degree or 2nd on dark skin."""
+    if q >= b["second_degree"]:
+        return "severe"
+    if q >= b["second_degree"] * thermal.DARK_SKIN_FACTOR or q >= b["first_degree"]:
+        return "likely"
+    return "none"
+
+
+def _burns(burst, rec, env, a: Assessment, prefix: str = ""):
     if burst.z_m < 0:
         return
-    s = thermal.at_surface(burst.yield_kt, burst.z_m, math.hypot(rec.x_m, rec.y_m))
+    rng = math.hypot(rec.x_m, rec.y_m)
+    s = thermal.at_surface(burst.yield_kt, burst.z_m, rng)
     b = thermal.burn_thresholds_cal_cm2(burst.yield_kt)
-    lvl = "severe" if s.burns["second_degree"] else "likely" if s.burns["second_degree_dark_skin"] or s.burns["first_degree"] else "none"
+    lo_f, hi_f, notes = conditions.thermal_factor(burst.z_m, math.hypot(rng, burst.z_m), env.visibility, env.overcast)
+    q_lo, q_hi = s.exposure_cal_cm2 * lo_f, s.exposure_cal_cm2 * hi_f
+    a.notes.extend(n for n in notes if n not in a.notes)
+    weather = "clear day" if (lo_f, hi_f) == (1.0, 1.0) else "with the weather chosen"
     a.effects.append(Effect(
-        "burns (bare skin facing the fireball)", lvl,
-        f"{s.exposure_cal_cm2:.3g} cal/cm2",
-        f"1st degree {b['first_degree']:.2g}, 2nd degree {b['second_degree']:.2g} cal/cm2 (clear day)", "fletcher1962",
-        s.exposure_cal_cm2, "cal/cm2"))
+        prefix + "burns (bare skin facing the fireball)", burn_level(q_hi, b),
+        f"{q_hi:.3g} cal/cm2" if q_lo == q_hi else f"{q_lo:.3g}-{q_hi:.3g} cal/cm2",
+        f"1st degree {b['first_degree']:.2g}, 2nd degree {b['second_degree']:.2g} cal/cm2 ({weather})",
+        "fletcher1962" + ("" if (lo_f, hi_f) == (1.0, 1.0) else ", dna_em1_1978, glasstone1977"),
+        q_hi, "cal/cm2"))
 
 
-def _radiation(burst, rec, env, a: Assessment, human: bool):
+def _flash(burst, rec, env, a: Assessment, prefix: str = ""):
+    """Flash blindness / retinal burn for someone looking toward the burst (Glasstone Fig. 12.88)."""
     if burst.z_m < 0:
-        a.notes.append("Initial radiation from underwater bursts is not modelled.")
+        return
+    d = conditions.flash_safe_distances_m(burst.yield_kt, burst.z_m, env.night, env.overcast)
+    when = "at night" if env.night else "by day"
+    if d is None:
+        note = ("Flash blindness: Glasstone's curves (Fig. 12.88) only cover bursts at 10,000 ft and 50,000 ft, so it is "
+                "not assessed for this burst height" + (". At night it reaches much farther than the other effects." if env.night else "."))
+        if note not in a.notes:
+            a.notes.append(note)
+        return
+    fb, rb = d
+    slant = math.hypot(math.hypot(rec.x_m, rec.y_m), burst.z_m)
+    if slant <= rb:
+        lvl, txt = "severe", "retinal burn possible (permanent blind spot) if looking toward the burst"
+    elif slant <= fb:
+        lvl, txt = "likely", "flash blindness: about 10 s of lost vision (longer in dim light)"
+    else:
+        lvl, txt = "none", "beyond the flash-blindness distance"
+    a.effects.append(Effect(
+        prefix + "flash blindness (eyes)", lvl,
+        f"{slant / 1000:.3g} km from the burst {when}: {txt}",
+        f"safe distances {when}: flash blindness {fb / 1609.344:.3g} mi, retinal burn {rb / 1609.344:.3g} mi (read off the graphs, ~10%)",
+        "glasstone1977 (Figs. 12.88a/b)", slant, "m"))
+
+
+def _radiation(burst, rec, env, a: Assessment, human: bool, prefix: str = "", shield=None):
+    if burst.z_m < 0:
+        note = "Initial radiation from underwater bursts is not modelled."
+        if note not in a.notes:
+            a.notes.append(note)
         return
     d = radiation_shielding.compute(burst, rec, env)
     lo, hi = d.total_gy
+    if shield:   # inside a ship (tm23_200 Table 6-5): gamma and neutron fractions
+        g_lo, g_hi, n_lo, n_hi = shield
+        lo = d.gamma_gy[0] * g_lo + d.neutron_gy[0] * n_lo
+        hi = d.gamma_gy[1] * g_hi + d.neutron_gy[1] * n_hi
     dose = pick(lo, hi, "shielding_u")   # position within the shielding range (default: the high end)
     if human:
         lvl, txt = "none", ""
@@ -231,9 +281,11 @@ def _radiation(burst, rec, env, a: Assessment, human: bool):
             if dose >= thr:
                 lvl, txt = l, t_
         a.effects.append(Effect(
-            "radiation sickness (initial radiation)", lvl,
+            prefix + "radiation sickness (initial radiation)", lvl,
             f"{_fmt_gy(lo)}-{_fmt_gy(hi)} Gy ({txt})",
-            f"Table 12.108 dose bands; LD50 ~ {c.HUMAN_LD50_GY} Gy with minimal care", "glasstone1977, pnnl2003",
+            f"Table 12.108 dose bands; LD50 ~ {c.HUMAN_LD50_GY} Gy with minimal care"
+            + ("; inside the ship: TM 23-200 Table 6-5 transmission factors" if shield else ""),
+            "glasstone1977, pnnl2003" + (", tm23_200" if shield else ""),
             dose, "Gy"))
     else:
         j_lo = c.FISH_LD50_JUVENILE_GY[0]
@@ -241,7 +293,49 @@ def _radiation(burst, rec, env, a: Assessment, human: bool):
         a.effects.append(Effect(
             "radiation (initial)", lvl, f"{_fmt_gy(lo)}-{_fmt_gy(hi)} Gy",
             "juvenile marine fish LD50 10.5-55.5 Gy; embryos ~0.9 Gy", "icrp108_draft", dose, "Gy"))
-    a.notes.append("Fallout radiation over days is assessed separately (Section 6b).")
+    note = "Fallout radiation over days is assessed separately (Section 6b)."
+    if note not in a.notes:
+        a.notes.append(note)
+
+
+def _ship(burst, rec, env, a: Assessment):
+    st = rec.ship_type or "destroyer"
+    rng = math.hypot(rec.x_m, rec.y_m)
+    if burst.z_m >= 0:
+        sb = air_blast.surface_blast(burst.yield_kt, burst.z_m, rng)
+        lvl, txt = ships.air_blast_damage(st, sb.peak_overpressure_pa)
+        sev, mod, light = ships.AIR_PSI[st]
+        a.effects.append(Effect(
+            "ship damage (air blast)", lvl, f"{sb.peak_overpressure_pa * units.PA_TO_PSI:.3g} psi peak overpressure: {txt}",
+            f"{ships.SHIP_LABEL[st]}: light {light:g}, moderate {mod:g}, severe {sev:g} psi (Table 8-1)", "tm23_200",
+            sb.peak_overpressure_pa * units.PA_TO_PSI, "psi"))
+        if st == "small_craft":
+            a.notes.append("Small craft use the 'LSTs, landing craft' row of TM 23-200 Table 8-1 (closest category).")
+        a.notes.append("Capsizing by the blast wind and damage from the water waves are not assessed (no published criteria).")
+    else:
+        lvl, txt, r = ships.underwater_damage(st, burst.yield_kt, -burst.z_m, rng)
+        a.effects.append(Effect(
+            "ship damage (underwater shock)", lvl, f"{rng / 1000:.3g} km away: {txt}",
+            f"{ships.SHIP_LABEL[st]}: severe within {r['severe'] / 1000:.2g} km, moderate {r['moderate'] / 1000:.2g} km, "
+            f"light {r['light'] / 1000:.2g} km (Figs. 8-1 to 8-3, cube-root scaled, read off the graphs)", "tm23_200",
+            rng, "m"))
+        a.notes.append("Underwater ship-damage ranges ignore the shock reflected from the sea floor, which can control "
+                       "light damage in shallow water (TM 23-200 p. 8-5).")
+    # the crew: on deck (exposed) and below deck (shielded by the hull)
+    deck = Receiver(rec.x_m, rec.y_m, max(rec.z_m, 1.0), kind="person", label=rec.label, mass_kg=rec.mass_kg)
+    _deck(burst, deck, env, a, prefix="crew on deck: ")
+    _burns(burst, deck, env, a, prefix="crew on deck: ")
+    _flash(burst, deck, env, a, prefix="crew on deck: ")
+    _radiation(burst, deck, env, a, human=True, prefix="crew on deck: ")
+    shield = ships.below_deck_factors(st)
+    if shield:
+        _radiation(burst, deck, env, a, human=True, prefix="crew below deck: ", shield=shield)
+        a.notes.append("Crew below deck: the range covers the different interior compartments (TM 23-200 Table 6-5, "
+                       "'estimated values'). They are not burned: the hull blocks the heat completely (Glasstone sec. 7.18). "
+                       "There is no published criterion for blast injury inside compartments.")
+    else:
+        a.notes.append("A small boat gives its crew little shielding; no transmission factors are published for small craft, "
+                       "so only the crew on deck is assessed.")
 
 
 def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> Assessment:
@@ -254,9 +348,9 @@ def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> 
     in_water = receiver.z_m < 0
     if kind in ("fish", "mammal", "turtle", "diver") and not in_water:
         raise ValueError(f"A {kind} must be in the water (z_m < 0).")
-    if kind == "person" and in_water:
+    if kind in ("person", "ship") and in_water:
         raise ValueError("A 'person' is on deck (z_m >= 0); use kind='diver' for someone underwater.")
-    if kind != "person":
+    if kind not in ("person", "ship"):
         a.notes.append("Injury criteria come from small charges with short pulses; applying them to nuclear "
                        "pulses is an extrapolation.")
     if kind == "fish":
@@ -274,7 +368,10 @@ def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> 
     elif kind == "person":
         _deck(burst, receiver, env, a)
         _burns(burst, receiver, env, a)
+        _flash(burst, receiver, env, a)
         _radiation(burst, receiver, env, a, human=True)
+    elif kind == "ship":
+        _ship(burst, receiver, env, a)
     else:
         raise ValueError(f"Unknown receiver kind {kind!r}")
     return a

@@ -96,7 +96,8 @@ export function askText(title, value = "", okLabel = "Save") {
 
 /** Save text or a data URL as a file in the user's downloads. */
 export function download(name, content, type = "application/json") {
-  const url = content.startsWith?.("data:") ? content : URL.createObjectURL(new Blob([content], { type }));
+  const url = content instanceof Blob ? URL.createObjectURL(content)
+    : content.startsWith?.("data:") ? content : URL.createObjectURL(new Blob([content], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.appendChild(a); a.click(); a.remove();
   if (!url.startsWith("data:")) setTimeout(() => URL.revokeObjectURL(url), 2000);

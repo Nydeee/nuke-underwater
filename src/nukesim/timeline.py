@@ -38,10 +38,11 @@ import numpy as np
 from . import units
 from .biology.assess import _water_pulse, assess
 from .biology.long_term import assess_long_term
-from .effects import air_blast, fallout, near_surface_shock, thermal, underwater_shock, water_waves
+from .effects import air_blast, conditions, fallout, near_surface_shock, thermal, underwater_shock, water_waves
 from .scenario import Burst, Environment, Receiver
 
 INITIAL_RADIATION_END_S = 60.0     # glasstone1977 sec. 8.02: "initial" = first minute
+FLASH_ONSET_S = 1e-3               # the light arrives at once; eye damage happens before a blink (0.25 s, sec. 12.88). Shown at 1 ms.
 NEUTRONS_DELIVERED_S = 1.0         # glasstone1977 sec. 8.51: nearly all neutrons within a second
 BRODE_ARRIVAL_VALID_S = (0.62e-3, 26.0)   # brode1987 Eq. 40 range at 1 kt (scales with W^(1/3))
 
@@ -236,11 +237,14 @@ def _fallout(b: Burst, wind_mph: float, fission_fraction: float, notes: list[str
 
 
 # ---------------------------------------------------------------- receivers
-def _burn_onset(b: Burst, r: Receiver, level: str) -> float | None:
+def _burn_onset(b: Burst, r: Receiver, level: str, env: Environment | None = None) -> float | None:
     """Time at which the heat received reaches the burn level found by the assessment."""
     if level == "none":
         return None
     s = thermal.at_surface(b.yield_kt, b.z_m, math.hypot(r.x_m, r.y_m))
+    if env is not None:   # weather changes how much heat arrives (same factor as the assessment)
+        rng = math.hypot(r.x_m, r.y_m)
+        s.exposure_cal_cm2 *= conditions.thermal_factor(b.z_m, math.hypot(rng, b.z_m), env.visibility, env.overcast)[1]
     th = thermal.burn_thresholds_cal_cm2(b.yield_kt)
     need = th["second_degree"] if level == "severe" else min(th["first_degree"], th["second_degree"] * thermal.DARK_SKIN_FACTOR)
     frac_needed = need / s.exposure_cal_cm2
@@ -261,8 +265,10 @@ def _receiver_timeline(b: Burst, r: Receiver, env: Environment, wind_mph: float,
         return out
     rng = out["range_m"]
 
-    # pressure pulse
+    # pressure pulse (a ship feels an underwater burst through its hull bottom: use a point just below the keel)
     pulse = None
+    if r.kind == "ship" and b.z_m < 0:
+        r = Receiver(r.x_m, r.y_m, -5.0, kind="gauge", label=r.label)
     if r.z_m <= 0:
         t, p, _ = _water_pulse(b, r, env)
         t_a, t_pk, t_e = _first_above(t, p)
@@ -301,21 +307,24 @@ def _receiver_timeline(b: Burst, r: Receiver, env: Environment, wind_mph: float,
     # each immediate effect gets the time at which it happens
     effects = []
     for e in res.effects:
-        if e.name.startswith(("blast", "hearing")):
-            onset = pulse["arrival_s"] if pulse else None
-        elif e.name.startswith("burns"):
-            onset = _burn_onset(b, r, e.level)
-        elif e.name.startswith("radiation"):
+        n = e.name
+        if "burns" in n:
+            onset = _burn_onset(b, r, e.level, env)
+        elif "radiation" in n:
             onset = INITIAL_RADIATION_END_S
+        elif "flash blindness" in n:
+            onset = FLASH_ONSET_S if e.level != "none" else None
+        elif "blast" in n or "hearing" in n or n.startswith("ship damage"):
+            onset = pulse["arrival_s"] if pulse else None
         else:
             onset = None
         effects.append({"name": e.name, "level": e.level, "value": e.value, "onset_s": onset})
     out["effects"] = effects
-    if any(e["name"].startswith("radiation") for e in effects):
+    if any("radiation" in e["name"] for e in effects):
         out["notes"].append("Initial radiation is counted as complete at 1 minute (Glasstone sec. 8.02). Neutrons come "
                             "within about a second (sec. 8.51); how much of the gamma dose comes in the first second "
                             "depends on yield and distance (65% near a 20 kt burst, 5% for 5 Mt, sec. 8.47) and is not modelled.")
-    if any(e["name"].startswith("burns") for e in effects):
+    if any("burns" in e["name"] for e in effects):
         out["notes"].append("Heat arrives at the speed of light; the burn level is shown from the moment the heat "
                             "received so far (Fletcher Eq. 2.112) passes the burn threshold.")
 
