@@ -17,6 +17,7 @@ Runs only on your computer.
 ```bash
 uv sync                      # install dependencies into .venv
 uv run pytest                # run the test suite
+uv run python scripts/validate.py   # compare with historical/published numbers -> docs/validation.md
 uv run python scripts/plot_air_blast_water.py --yield-kt 20 --height-m 500
 uv run python scripts/plot_radiation_water.py --yield-kt 20 --height-m 500
 uv run python scripts/plot_fallout_sea.py --yield-kt 1000 --height-m 0 --x-km 50

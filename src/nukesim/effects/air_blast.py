@@ -28,6 +28,7 @@ from ..uncertainty import factor
 
 # Unit helpers: Brode works in kilofeet (kft), milliseconds and psi.
 M_PER_KFT = 1000.0 * units.FT_TO_M
+BRODE_MIN_PSI = 0.07   # lower validity limit of Brode's free-air fit (brode1987 p.26)
 
 
 def _scale(yield_kt: float) -> float:
@@ -111,6 +112,8 @@ def solve_friedlander_b(impulse: float, peak: float, duration: float) -> float:
     ratio = impulse / (peak * duration)
     if ratio >= 0.5:  # b = 0 (straight-line decay) is the fullest Friedlander shape
         return 0.0
+    if ratio <= friedlander_impulse_ratio(500.0):  # extremely close in: steepest shape we allow
+        return 500.0
     return brentq(lambda b: friedlander_impulse_ratio(b) - ratio, 1e-9, 500.0)
 
 
@@ -158,7 +161,8 @@ def peak_overpressure_pa(yield_kt: float, height_m: float, ground_range_m: float
     m = _scale(yield_kt)
     x = ground_range_m / M_PER_KFT / m
     y = height_m / M_PER_KFT / m
-    return brode_hob_psi(x, y) * units.PSI_TO_PA * factor("brode_peak")
+    # The fit can dip below zero far outside its range (< 0.07 psi); never report negative peaks.
+    return max(brode_hob_psi(x, y), 0.0) * units.PSI_TO_PA * factor("brode_peak")
 
 
 def arrival_time_s(yield_kt: float, height_m: float, ground_range_m: float) -> float:
@@ -182,15 +186,18 @@ def surface_blast(yield_kt: float, height_m: float, ground_range_m: float) -> Su
     p_pa = peak_overpressure_pa(yield_kt, height_m, ground_range_m)
     p_psi = p_pa * units.PA_TO_PSI
     w_surface = 2.0 * yield_kt  # Brode's surface-burst rule for durations/impulses
-    d_s = brode_duration_ms(w_surface, p_psi) / 1000.0
-    i_pa_s = brode_impulse_psi_ms(w_surface, p_psi) * units.PSI_TO_PA / 1000.0
+    if p_psi < BRODE_MIN_PSI:
+        warnings.append("Below 0.07 psi: outside Brode's fits; the blast here is negligible.")
+    p_fit = max(p_psi, BRODE_MIN_PSI)   # durations/impulses evaluated at the fits' lower limit
+    d_s = brode_duration_ms(w_surface, p_fit) / 1000.0
+    i_pa_s = brode_impulse_psi_ms(w_surface, p_fit) * units.PSI_TO_PA / 1000.0 * (p_psi / p_fit)
     if p_psi > 15_000:
         warnings.append("Overpressure > 15,000 psi: pressure-time shape unreliable this close (brode1987 p.41).")
     if not (2.0 <= p_psi <= 100_000):
         warnings.append("Impulse fit is only good to 10% for 2-100,000 psi (brode1987 p.38).")
     if fireball_touches_water(yield_kt, height_m):
         warnings.append("Fireball likely reaches the water: vaporisation and direct water shock not modelled here.")
-    b = solve_friedlander_b(i_pa_s, p_pa, d_s)
+    b = solve_friedlander_b(i_pa_s, p_pa, d_s) if p_pa > 0 else 0.0
     return SurfaceBlast(
         ground_range_m=ground_range_m,
         peak_overpressure_pa=p_pa,

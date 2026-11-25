@@ -247,6 +247,8 @@ def _radiation(burst, rec, env, a: Assessment, human: bool):
 def assess(burst: Burst, receiver: Receiver, env: Environment | None = None) -> Assessment:
     """Immediate effects (blast, burns, acute radiation) for one receiver."""
     env = env or Environment()
+    if burst.z_m < 0 and -burst.z_m >= env.water_depth_m:
+        raise ValueError("The burst is below the sea floor: make the water deeper or the burst shallower.")
     a = Assessment(receiver)
     kind = receiver.kind
     in_water = receiver.z_m < 0

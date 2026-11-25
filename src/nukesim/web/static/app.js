@@ -352,6 +352,13 @@ async function runAssess() {
 
 async function refreshScenario() {
   const sc = scenario();
+  if (!(sc.burst.yield_kt > 0)) {
+    $("status").textContent = "Enter a yield above zero.";
+    $("burstInfo").innerHTML = "<b>No burst: the yield must be above zero.</b>";
+    state.results = {}; buildReceivers(); renderList();
+    $("report").innerHTML = `<p class="hint">No burst to assess.</p>`;
+    return;
+  }
   const wd = sc.env.water_depth_m;   // keep everything in the sea above the sea floor
   if (wd) state.receivers.forEach((r) => { if (r.kind !== "person" && -r.z_m > wd - 0.5) r.z_m = -Math.max(wd - 0.5, 0.3); });
   renderList();
@@ -398,8 +405,9 @@ function applyOverlayTexture() {
   const g = c.getContext("2d");
   const img = g.createImageData(nr, nd);
   const flat = data.values.flat().filter((v) => v != null && v > 0);
-  const lo = flat.length ? Math.log10(Math.max(Math.min(...flat), 1e-6)) : 0;
   const hi = flat.length ? Math.log10(Math.max(...flat)) : 1;
+  // show at most 6 powers of ten below the maximum, otherwise tiny values flatten the colours
+  const lo = flat.length ? Math.max(Math.log10(Math.max(Math.min(...flat), 1e-300)), hi - 6) : 0;
   for (let i = 0; i < nd; i++) for (let j = 0; j < nr; j++) {
     const v = data.values[i][j];
     let rgb = [40, 40, 40];

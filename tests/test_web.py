@@ -95,3 +95,10 @@ def test_uncertainty_list():
     items = client.get("/api/uncertainties").json()
     assert {"brode_peak", "initial_radiation", "cf_fish"} <= {i["name"] for i in items}
     assert {i["basis"] for i in items} == {"sourced", "judgement"}
+
+
+def test_burst_below_sea_floor_is_reported():
+    sc = {"burst": {"yield_kt": 20, "z_m": -500}, "env": {"water_depth_m": 100}}
+    assert client.post("/api/info", json=sc).json()["regime"].startswith("impossible")
+    out = client.post("/api/assess", json={**sc, "receivers": [{"id": "p", "kind": "person", "x_m": 1000, "z_m": 2}]}).json()
+    assert "below the sea floor" in out["receivers"][0]["error"]

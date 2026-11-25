@@ -113,7 +113,9 @@ def _clean(x):
     return x
 
 
-def regime(b: Burst) -> str:
+def regime(b: Burst, env: Environment | None = None) -> str:
+    if env is not None and b.z_m < 0 and -b.z_m >= env.water_depth_m:
+        return "impossible: the burst is below the sea floor"
     if near_surface_shock.in_regime(b):
         return "near-surface burst (fireball touches the water)"
     if b.z_m < 0:
@@ -151,8 +153,11 @@ def info(s: Scenario):
     b, env = _burst(s.burst), _env(s.env)
     depth_ft = max(-b.z_m, 0.0) * units.M_TO_FT
     rc, dc = water_waves.crater_ft(b.yield_kt, depth_ft)
+    if regime(b, env).startswith("impossible"):
+        return _clean({"regime": regime(b, env), "fireball_radius_m": 0.0, "local_fallout": False, "coupling": None,
+                       "crater_radius_m": None, "crater_depth_m": None, "levels": LEVELS})
     return _clean({
-        "regime": regime(b),
+        "regime": regime(b, env),
         "fireball_radius_m": fireball_radius_m(b.yield_kt, b.z_m),
         "local_fallout": b.z_m >= 0 and fallout.has_local_fallout(b.yield_kt, b.z_m),
         "coupling": near_surface_shock.coupling(b.yield_kt, near_surface_shock.scaled_depth_ft(b.yield_kt, -b.z_m))
