@@ -111,6 +111,19 @@ SOURCES: dict[str, Source] = {
         ),
         notes="NOT read in an original source. The weakest-sourced number in Section 3.",
     ),
+    "redwing1956": Source(
+        key="redwing1956",
+        citation=(
+            "Operation Redwing (1956): Military Effects Summary Report (ADA995132), and Triffet, T. "
+            "& LaRiviere, P. D., Characterization of Fallout, WT-1317 (1961)."
+        ),
+        url="https://archive.org/details/DnaEm1CapabilitiesOfNuclearWeapons",
+        notes=(
+            "Sec. 3.4: dose rate 3 ft above contaminated sea x ~1,000 = land-equivalent, assuming "
+            "60 m mixing depth; activity sank from 10-20 m to the thermocline at 3-4 m/h and stayed "
+            "roughly uniform above it for >= 2 days. Read via OCR text."
+        ),
+    ),
 }
 
 

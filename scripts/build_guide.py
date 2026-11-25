@@ -182,10 +182,33 @@ def fig_radiation_map():
     save(fig, "radiation_map.png")
 
 
+def fig_decay():
+    from nukesim.effects import sea_contamination as sc
+
+    t = np.geomspace(1, 24 * 30, 300)
+    fig, ax = plt.subplots(figsize=(6.5, 3.4))
+    ax.loglog(t, sc.decay_factor(t))
+    for k, tt in enumerate((7, 49, 343)):
+        ax.plot([tt], [sc.decay_factor(tt)], "o", c="C3")
+        ax.annotate(f"{tt} h: about 1/{10**(k + 1)}", (tt, sc.decay_factor(tt)), xytext=(6, 6), textcoords="offset points")
+    ax.set(xlabel="time after the burst (hours)", ylabel="dose rate / 1-hour value", title="Fallout decay: t^-1.2 and the 7:10 rule")
+    ax.grid(True, which="both", alpha=0.3)
+    save(fig, "decay.png")
+
+
+def fig_fallout_sea():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pfs", ROOT / "scripts" / "plot_fallout_sea.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    save(mod.plot(Burst(yield_kt=1000, z_m=0)), "fallout_sea.png")
+
+
 def main():
     for f in (fig_log_vs_linear, fig_exponential_decay, fig_pressure_vs_range, fig_image_source, fig_cutoff_depths,
               fig_surface_overpressure, fig_trace_speed, fig_water_map,
-              fig_surface_dose, fig_radiation_map):
+              fig_surface_dose, fig_radiation_map, fig_decay, fig_fallout_sea):
         f()
     out = ROOT / "output" / "guide.pdf"
     typst.compile(str(ROOT / "docs" / "guide" / "main.typ"), output=str(out), root=str(ROOT))

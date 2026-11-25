@@ -9,5 +9,6 @@
 #include "ch01_underwater_shock.typ"
 #include "ch02_air_blast_into_water.typ"
 #include "ch03_radiation_into_water.typ"
+#include "ch04_fallout_and_sea.typ"
 #include "glossary.typ"
 #include "references.typ"
