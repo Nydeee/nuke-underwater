@@ -19,6 +19,9 @@ a model that is already in the simulator and already validated.
                                 share in the first second depends on yield and
                                 distance (65% at 1,000 yd from 20 kt, 5% at
                                 2,500 yd from 5 Mt, sec. 8.47) -- NOT modelled
+  underwater gas bubble         max radius: Cole's TNT bubble law with the same      cole1948, glasstone1977 secs
+                                TNT equivalent as the water shock; growth and        2.67, 2.86, 6.53
+                                collapse: Rayleigh's bubble equation (first cycle)
   water waves                   front at sqrt(g d), biggest wave at g T / (4 pi)    glasstone1977 6.120, lemehaute1996
   fallout                       arrives at distance / wind speed, then decays as     glasstone1977 9.97, 9.147
                                 t^-1.2 and mixes down 3-4 m/h                       redwing1956
@@ -35,7 +38,7 @@ import numpy as np
 from . import units
 from .biology.assess import _water_pulse, assess
 from .biology.long_term import assess_long_term
-from .effects import air_blast, fallout, near_surface_shock, thermal, water_waves
+from .effects import air_blast, fallout, near_surface_shock, thermal, underwater_shock, water_waves
 from .scenario import Burst, Environment, Receiver
 
 INITIAL_RADIATION_END_S = 60.0     # glasstone1977 sec. 8.02: "initial" = first minute
@@ -147,6 +150,59 @@ def _water_shock(b: Burst, env: Environment) -> dict | None:
     if b.z_m >= 0 and not near_surface_shock.in_regime(b):
         return None
     return {"source_z_m": min(b.z_m, 0.0), "speed_m_s": env.sound_speed_m_s}
+
+
+# Cole (1948) TNT bubble law: R_max = J * (W / (Z + 33))^(1/3), R and Z in ft, W in lb TNT,
+# J = 12.6 ft for TNT; Z + 33 ft is the absolute pressure at the burst depth in feet of sea water.
+COLE_BUBBLE_J_FT = 12.6
+SCALED_DEPTH_VENTS_FT = 35.0   # glasstone1977 sec. 6.53: below ~35 ft/kt^(1/3) the bubble vents on its first expansion
+
+
+def bubble_max_radius_m(yield_kt: float, depth_m: float) -> float:
+    """Largest radius of the gas bubble (Cole's TNT law, nuclear yield -> TNT as for the water shock)."""
+    w_lb = underwater_shock.effective_tnt_lb(yield_kt)
+    z_ft = depth_m * units.M_TO_FT
+    return COLE_BUBBLE_J_FT * (w_lb / (z_ft + 33.0)) ** (1.0 / 3.0) * units.FT_TO_M
+
+
+def _bubble(b: Burst, env: Environment, notes: list[str]) -> dict | None:
+    """Gas bubble of an underwater burst: radius vs time over its first expansion and collapse.
+
+    Rayleigh's equation for an empty cavity in incompressible water (gas pressure neglected),
+    written so it reaches the Cole maximum radius: with R = R_max * sin(phi)^(2/3),
+    t = R_max * sqrt(rho / P) * sqrt(3/2) * (2/3) * integral_0^phi sin(psi)^(2/3) dpsi,
+    which gives the classic time to maximum 0.915 R_max sqrt(rho / P).
+    """
+    if b.z_m >= 0:
+        return None
+    depth = -b.z_m
+    r_max = bubble_max_radius_m(b.yield_kt, depth)
+    p = env.hydrostatic_pressure_pa(depth)
+    phi = np.linspace(0.0, math.pi, 400)
+    integrand = np.abs(np.sin(phi)) ** (2.0 / 3.0)
+    integral = np.concatenate([[0.0], np.cumsum(0.5 * (integrand[1:] + integrand[:-1]) * np.diff(phi))])
+    t = r_max * math.sqrt(env.density_kg_m3 / p) * math.sqrt(1.5) * (2.0 / 3.0) * integral
+    r = r_max * integrand
+    scaled = depth * units.M_TO_FT / b.yield_kt ** (1.0 / 3.0)
+    vents = r_max >= depth
+    vent_s = None
+    if vents:   # the top of the bubble reaches the surface while it is still growing: it vents (sec. 2.67)
+        k = int(np.argmax(r >= depth))
+        vent_s = float(np.interp(depth, r[: k + 1], t[: k + 1]))
+        keep = t <= vent_s
+        t, r = np.append(t[keep], vent_s), np.append(r[keep], depth)
+    floor = env.water_depth_m if math.isfinite(env.water_depth_m) else None
+    notes.append("Gas bubble: largest size from Cole's (1948) TNT bubble law, using the same TNT equivalent as the "
+                 "water shock (an assumption: Glasstone gives no bubble size); growth and collapse follow Rayleigh's "
+                 "bubble equation, which ignores the gas pressure inside, the bubble rising, and the later "
+                 "pulsations (Glasstone secs. 2.86-2.88: two or three more cycles).")
+    if vents:
+        notes.append(f"The bubble reaches the surface after about {vent_s * 1e3:.0f} ms and vents (Glasstone sec. 2.67; "
+                     f"scaled depth {scaled:.0f} ft/kt^1/3, venting expected below about 35, sec. 6.53). For BAKER, "
+                     "Glasstone sec. 2.68 says 'a few milliseconds' after the spray dome began (~4 ms).")
+    return {"center_z_m": b.z_m, "max_radius_m": r_max, "t_s": t, "radius_m": r, "vents": bool(vents),
+            "vent_s": vent_s, "floor_z_m": -floor if floor else None, "scaled_depth_ft": scaled,
+            "end_s": float(t[-1])}
 
 
 def _waves(b: Burst, env: Environment, notes: list[str]) -> dict | None:
@@ -293,6 +349,7 @@ def timeline(b: Burst, env: Environment, receivers: list[Receiver], *, wind_mph:
     fb = _fireball(b, max_fireball_radius_m, notes)
     blast = _air_blast_front(b, min(t_end, 600.0), notes)
     ws = _water_shock(b, env)
+    bub = _bubble(b, env, notes)
     wv = _waves(b, env, notes)
     fo = _fallout(b, wind_mph, fission_fraction, notes)
     recs = [_receiver_timeline(b, r, env, wind_mph, fission_fraction, days) for r in receivers]
@@ -314,6 +371,8 @@ def timeline(b: Burst, env: Environment, receivers: list[Receiver], *, wind_mph:
         f = r.get("fallout")
         if f:
             events.append({"t_s": f["arrival_s"], "label": f"fallout reaches {r['id']}", "kind": "fallout", "receiver": r["id"]})
+    if bub and bub["vents"]:
+        events.append({"t_s": bub["vent_s"], "label": "gas bubble reaches the surface", "kind": "blast"})
     events.sort(key=lambda e: e["t_s"])
-    return {"t_end_s": t_end, "events": events, "fireball": fb, "air_blast": blast, "water_shock": ws,
+    return {"t_end_s": t_end, "events": events, "fireball": fb, "air_blast": blast, "water_shock": ws, "bubble": bub,
             "waves": wv, "fallout": fo, "receivers": recs, "notes": notes}

@@ -13,11 +13,15 @@
 //   * underwater-burst water column: illustrative, sized from the 1946 BAKER test
 //     (Glasstone sec. 2.68) with cube-root scaling (our assumption);
 //   * sky, sun, ripples, colours: decoration.
+//   * underwater mode (camera below the surface): see underwater.js.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { createCameraTween } from "./freecam.js";
+import { fmtDepth } from "./units.js";
 import { Water } from "three/addons/objects/Water.js";
 import { makeModel, realLength } from "./models.js";
+import { initUnderwater } from "./underwater.js";
 
 const FT = 0.3048;
 
@@ -117,7 +121,10 @@ export function initRealistic({ renderer, state, scenario, levelColor, timeline,
   const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 3e6);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enabled = false;
-  controls.maxPolarAngle = Math.PI * 0.495;   // stay above the water (the underwater view is a later step)
+  controls.maxPolarAngle = Math.PI;   // the camera may go below the surface: that switches to the underwater look
+  controls.enableDamping = true;
+  const tween = createCameraTween(camera, controls);
+  let pinsOn = true;
 
   // sun and sky
   // sun behind and to the side of the preset cameras (they look roughly toward -z), so the sky reads blue
@@ -152,11 +159,13 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
   const skyScene = new THREE.Scene();
   skyScene.add(new THREE.Mesh(sky.geometry, sky.material));
   scene.environment = pmrem.fromScene(skyScene, 0, 0.1, 10).texture;
-  scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x23415a, 0.6));
+  const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x23415a, 0.6);
+  scene.add(hemi);
   const sunLight = new THREE.DirectionalLight(0xfff2dc, 2.2);
   sunLight.position.copy(sun).multiplyScalar(1e5);
   scene.add(sunLight);
-  scene.fog = new THREE.FogExp2(0xcddcea, 6e-6);
+  const airFog = new THREE.FogExp2(0xcddcea, 6e-6);
+  scene.fog = airFog;
 
   // ocean
   const water = new Water(new THREE.PlaneGeometry(1.2e6, 1.2e6), {
@@ -167,6 +176,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
   water.rotation.x = -Math.PI / 2;
   water.material.uniforms.size.value = 0.6;
   scene.add(water);
+  const uw = initUnderwater({ scene, camera, renderer, sunDir: sun, normalMap: water.material.uniforms.normalSampler.value, glowTexture: glowTexture() });
 
   // fireball
   const fireball = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32),
@@ -215,6 +225,15 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
   // receivers (3D models + floating marker pins)
   const recGroup = new THREE.Group();
   scene.add(recGroup);
+  // Above water, boats are drawn 6x bigger so they can be seen from far away; under water everything is true size.
+  function placeReceiver(model, pin, line, r, under) {
+    const { L, vis, boat } = model.userData.rec, k = under ? 1 : vis;
+    model.scale.setScalar(L * k);
+    model.position.set(r.x_m, boat ? 0.4 * L * k * 0.16 : r.z_m, r.y_m || 0);
+    pin.position.set(r.x_m, under ? pin.userData.pin.below : pin.userData.pin.above, r.y_m || 0);
+    pin.visible = pinsOn;
+    if (line) line.visible = !under && pinsOn;
+  }
   function buildReceivers() {
     while (recGroup.children.length) recGroup.remove(recGroup.children[0]);
     for (const r of state.receivers) {
@@ -222,19 +241,21 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       const model = makeModel(r, color);
       const L = realLength(r);
       const vis = r.kind === "person" ? 6 : 1;            // boats drawn 6x bigger so they can be seen
-      model.scale.setScalar(L * vis);
-      model.position.set(r.x_m, r.kind === "person" ? 0.4 * L * vis * 0.16 : r.z_m, r.y_m || 0);
+      model.userData.rec = { L, vis, boat: r.kind === "person", phase: Math.random() * 6.28 };
       model.rotation.y = r.kind === "person" ? Math.PI : 0;   // boats face ground zero
       recGroup.add(model);
       const pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(r.emoji || "•", color), depthTest: false, sizeAttenuation: false }));
       pin.scale.set(0.045, 0.045, 1);
-      pin.position.set(r.x_m, Math.max(25, L * vis * 2), r.y_m || 0);
       pin.renderOrder = 10;
+      pin.userData.pin = { above: Math.max(25, L * vis * 2), below: r.kind === "person" ? -2 : r.z_m + Math.max(1, L * 1.2) };
       recGroup.add(pin);
+      let line = null;
       if (r.kind !== "person") {   // a line from the pin down to the animal's depth
-        const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(r.x_m, pin.position.y, 0), new THREE.Vector3(r.x_m, r.z_m, 0)]);
-        recGroup.add(new THREE.Line(g, new THREE.LineDashedMaterial({ color, dashSize: 3, gapSize: 3, transparent: true, opacity: 0.8 })).computeLineDistances());
+        const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(r.x_m, pin.userData.pin.above, r.y_m || 0), new THREE.Vector3(r.x_m, r.z_m, r.y_m || 0)]);
+        line = new THREE.Line(g, new THREE.LineDashedMaterial({ color, dashSize: 3, gapSize: 3, transparent: true, opacity: 0.8 })).computeLineDistances();
+        recGroup.add(line);
       }
+      placeReceiver(model, pin, line, r, wasUnder);
     }
   }
 
@@ -243,11 +264,21 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     const y = scenario().burst.yield_kt || 1;
     return { top: cloudTopM(y), rad: cloudRadiusM(y) };
   }
-  function setPreset(name) {
+  function setPreset(name, instant = false) {
+    const from = camera.position.clone();
     const sc = scenario(), { top } = sizes(), bz = Math.max(sc.burst.z_m, 0);
     const boat = state.receivers.find((r) => r.kind === "person");
     const look = new THREE.Vector3(0, Math.max(top * 0.45, bz), 0);
-    if (name === "boat") {
+    if (name === "under") {
+      // next to the first animal/diver in the sea, at its true depth, looking back toward ground zero
+      const wd = sc.env.water_depth_m, r = state.receivers.find((q) => q.kind !== "person");
+      const L = r ? realLength(r) : 2, d = Math.max(5, L * 4);
+      const x = r ? r.x_m : 600, z = r ? r.y_m || 0 : 0;
+      let y = r ? r.z_m : -15;
+      if (wd) y = Math.max(y, -wd + 2);
+      camera.position.set(x + d * 0.9, Math.min(y + d * 0.2, -1), z + d * 0.7);
+      look.set(x - d * 1.5, Math.min(y + d * 0.6, -0.5), z);   // tilted up a little: the bright window overhead
+    } else if (name === "boat") {
       const x = boat ? boat.x_m : Math.max(top * 1.5, 3000);
       camera.position.set(x + 15, 6, 8);
     } else if (name === "side") {
@@ -259,8 +290,9 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     } else {   // aerial
       camera.position.set(top * 1.6, top * 1.1, top * 1.9);
     }
-    controls.target.copy(look);
-    controls.update();
+    const to = camera.position.clone();
+    camera.position.copy(from);
+    tween.to(to, look, 1.2, instant || !active);
   }
 
   // ---------------------------------------------------------------- per-frame update
@@ -280,12 +312,17 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     lastT = now;
     if (!active) return;
     water.material.uniforms.time.value += dt * 0.6;
-    controls.update();
+    if (controls.enabled) { tween.update(); controls.update(); }   // (the free camera moves it otherwise)
+    const wdFloor = scenario().env.water_depth_m;
+    if (wdFloor && camera.position.y < -wdFloor + 0.5) camera.position.y = -wdFloor + 0.5;   // don't go through the sea floor
+    const under = camera.position.y < 0;
+    if (under !== wasUnder) setUnder(under);
 
     const sc = scenario(), y = sc.burst.yield_kt;
     const t = timeline.getTime(), data = timeline.getData();
     const bz = sc.burst.z_m;
     const info = getInfo();
+    let uwBlast = null;
 
     // --- fireball and flash
     let flash = 0;
@@ -311,7 +348,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       glow.position.copy(fireball.position); glow.scale.setScalar(info.fireball_radius_m * 5);
       fireLight.intensity = 0;
     } else { fireball.visible = glow.visible = false; fireLight.intensity = 0; }
-    renderer.toneMappingExposure = 0.5 + 2.5 * flash;
+    renderer.toneMappingExposure = (under ? 0.9 : 0.5) + 2.5 * flash;
 
     // --- blast front
     const ab = data && data.air_blast;
@@ -325,10 +362,14 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       blastRing.visible = ground > 0 && pk > ab.negligible_kpa;
       blastRing.scale.setScalar(Math.max(ground, 1));
       blastRing.material.opacity = strength;
+      uwBlast = blastRing.visible ? { r: ground, strength } : null;
     } else { shell.visible = blastRing.visible = false; }
+    if (under) shell.visible = blastRing.visible = false;   // the underwater surface shader draws the ring instead
 
     // --- waves (crest rings); heights below 1 m drawn at 1 m so they stay visible
     const wv = data && data.waves;
+    const uwRings = [];
+    let ringWidth = 20;
     if (wv && t > 0) {
       const rMax = wv.max_wave_speed_m_s * t;
       const L = 9.81 * wv.period_s * wv.period_s / (2 * Math.PI);   // deep-water wavelength for that period
@@ -340,13 +381,27 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
         m.scale.set(r, r, Math.max(h, 1) / 2 / (r * 0.0025));   // tube thickness ~ wave height
         m.position.y = 0.2;
         m.material.opacity = 0.85 * Math.pow(0.7, k);
+        uwRings.push({ r, h, fade: Math.pow(0.7, k) });
+        if (under) m.visible = false;
       });
+      ringWidth = Math.min(Math.max(L / 8, 4), 300);   // band width illustrative; radii from the timeline
     } else waveRings.forEach((m) => (m.visible = false));
 
     // --- cloud or water column
     updateCloud(t, y, bz, data, fb);
 
-    // --- receivers bob a little with the ripples
+    // --- underwater
+    if (under) {
+      cloud.visible = false; fireball.visible = false; glow.visible = false;
+      uw.update({ dt, t, data, floorY: wdFloor ? -wdFloor : null, rings: uwRings, ringWidth, blast: uwBlast,
+        fire: flash > 0 ? { pos: fireball.position, power: flash } : null });
+      // animals sway gently (decoration)
+      for (const m of recGroup.children) {
+        const rc = m.userData.rec;
+        if (rc && !rc.boat) m.rotation.y = Math.sin(now / 700 + rc.phase) * 0.12;
+      }
+      if (hud) hud.querySelector("b").textContent = fmtDepth(-camera.position.y);
+    }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
   }
 
@@ -422,20 +477,50 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     }
   }
 
+  // switch the whole scene between the above-water and underwater looks
+  let wasUnder = false;
+  const hud = document.getElementById("uwHud");
+  function setUnder(on) {
+    wasUnder = on;
+    uw.setOn(on);
+    water.visible = sky.visible = !on;
+    scene.fog = on ? uw.fog : airFog;
+    if (!on) scene.background = null;
+    hemi.color.set(on ? 0x8fe0e0 : 0xcfe4ff); hemi.groundColor.set(on ? 0x05202a : 0x23415a); hemi.intensity = on ? 1.1 : 0.6;
+    sunLight.intensity = on ? 1.2 : 2.2;
+    const recs = state.receivers;
+    let i = 0;
+    for (let k = 0; k < recGroup.children.length; k++) {   // children come in order: model, pin, (line)
+      const model = recGroup.children[k];
+      if (!model.userData.rec) continue;
+      const pin = recGroup.children[k + 1], line = recGroup.children[k + 2] && recGroup.children[k + 2].isLine ? recGroup.children[k + 2] : null;
+      if (recs[i]) placeReceiver(model, pin, line, recs[i], on);
+      i++;
+    }
+    if (hud) hud.hidden = !on;
+    document.body.classList.toggle("underwater", on);
+  }
+
   function resize(w, h) { camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function setActive(on) {
     active = on;
     controls.enabled = on;
+    if (!on && wasUnder) setUnder(false);
     if (on) buildReceivers();
   }
 
-  setPreset("aerial");
-  window.nukesimRealistic = { cloud, glow, fireball, camera, scene, sky, water, renderer, controls };   // handy for checking things in the browser console
-  return { scene, camera, controls, update, setPreset, setActive, resize, rebuildReceivers: buildReceivers,
+  function setPins(on) { pinsOn = on; if (active) buildReceivers(); }
+
+  setPreset("aerial", true);
+  window.nukesimRealistic = { cloud, glow, fireball, camera, scene, sky, water, renderer, controls, uw, isUnderwater: () => wasUnder };   // handy for checking things in the browser console
+  return { scene, camera, controls, update, setPreset, setActive, resize, setPins, tween, rebuildReceivers: buildReceivers,
+    isUnderwater: () => wasUnder,
     notes: [
       "Fireball, blast front and waves: from the simulator's timeline (validated models).",
       "Mushroom cloud size and rise: curve fits to Glasstone & Dolan Figs. 2.12 and 9.96 and Miller (1963), as in NUKEMAP; its shape is illustrative.",
       "Underwater-burst water column: illustrative, scaled from the 1946 BAKER test by the cube root of the yield (our assumption).",
-      "Boats are drawn 6x larger and animals have marker pins so they can be seen at these distances.",
+      "Boats are drawn 6x larger and animals have marker pins so they can be seen at these distances (under water everything is true size).",
+      "Underwater: the shock front (speed of sound in water), the gas bubble (Cole's size, Rayleigh's growth) and the wave and blast rings overhead come from the timeline; the bright window overhead and the slant of the light shafts follow Snell's law.",
+      "Underwater: the water colour, how far you can see (a few hundred metres, far more than in real sea water), the caustic pattern, the bubble's early glow, the shock front's brightness and the floating particles are illustrative. Reflection of the shock off the sea floor is not drawn.",
     ] };
 }

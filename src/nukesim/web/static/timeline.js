@@ -32,7 +32,7 @@ export function fmtTime(t) {
   if (t < 86400) return `${p(t / 3600)} h`;
   return `${p(t / 86400)} days`;
 }
-const fmtDist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${+(m / 1000).toPrecision(3)} km`);
+import { fmtLen as fmtDist } from "./units.js";
 const fmtNum = (v) => (v == null ? "–" : Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(1) : +v.toPrecision(3));
 
 // linear interpolation in log(t); returns `before` before the first sample, the last value after the last
@@ -79,9 +79,20 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
       <button class="tl-end" title="Jump to the end (everything has happened)">⏭</button>
     </div>`;
   main.appendChild(bar);
-  const now = document.createElement("div");
-  now.id = "tlNow";
-  main.appendChild(now);
+  const nowBox = document.createElement("div");
+  nowBox.id = "tlNow";
+  nowBox.innerHTML = `<button class="tlNowHead" title="Show / hide this box"><span>At this moment</span><span class="chev">▾</span></button><div class="tlNowBody"></div>`;
+  main.appendChild(nowBox);
+  const now = nowBox.querySelector(".tlNowBody");
+  let pref = null;
+  try { pref = localStorage.getItem("nukesim.tlNowCollapsed"); } catch (_) { /* ignore */ }
+  // collapsed if the user left it so, or (by default) when the 3D view is narrow
+  if (pref === "1") nowBox.classList.add("collapsed");
+  else if (pref === null) setTimeout(() => { if (main.clientWidth < 760) nowBox.classList.add("collapsed"); }, 300);   // after the page has laid out
+  nowBox.querySelector(".tlNowHead").addEventListener("click", () => {
+    nowBox.classList.toggle("collapsed");
+    try { localStorage.setItem("nukesim.tlNowCollapsed", nowBox.classList.contains("collapsed") ? "1" : "0"); } catch (_) { /* ignore */ }
+  });
   const q = (s) => bar.querySelector(s);
   const track = q(".tl-track"), fill = q(".tl-fill"), thumb = q(".tl-thumb"), hover = q(".tl-hover");
   const markers = q(".tl-markers"), ticks = q(".tl-ticks"), playBtn = q(".tl-play"), speedSel = q(".tl-speed select");
@@ -136,7 +147,8 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
   });
   q(".tl-end").addEventListener("click", () => { setT(tEnd); playing = false; playBtn.textContent = "▶"; });
   window.addEventListener("keydown", (ev) => {
-    if (ev.code !== "Space" || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(document.activeElement?.tagName)) return;
+    if (ev.code !== "Space" || document.body.classList.contains("flying") || document.querySelector(".modal:not([hidden]), .tourCard")
+      || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(document.activeElement?.tagName)) return;
     ev.preventDefault(); playBtn.click();
   });
 
@@ -394,6 +406,12 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
     getData: () => data,                                                   // used by realistic.js
     play: () => { if (!playing) playBtn.click(); },                        // used by realistic.js
     isAtEnd: () => t >= tEnd,
+    isPlaying: () => playing,
+    togglePlay: () => playBtn.click(),
+    pause: () => { if (playing) playBtn.click(); },
+    step: (dir) => setT(tOf(Math.min(Math.max(uOf(Math.max(t, T0)) + 0.02 * dir, 0), 1))),   // 1/50 of the slider
+    toStart: () => setT(0),
+    toEnd: () => q(".tl-end").click(),
   };
   window.nukesimTimeline = api;   // handy for trying things in the browser console
   return api;

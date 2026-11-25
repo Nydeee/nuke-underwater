@@ -79,6 +79,7 @@ and the *dose so far*.
   [Fireball growth after "breakaway"], [It keeps the shock-front radius until the full size. This is a rough sketch in the middle of the growth.],
   [The last ~20% of the heat], [Fletcher's fit stops at about 80% delivered. The fade-out after that is only illustrative.],
   [The rising cloud and the mushroom], [Not drawn.],
+  [The gas bubble of an underwater burst], [Glasstone gives no bubble size. The simulator uses Cole's (1948) TNT bubble formula with the same TNT equivalent as the water shock, and Rayleigh's bubble equation for how it grows and shrinks. That puts the BAKER bubble at the surface after about 30 ms; Glasstone says "a few milliseconds" (sec. 2.68), so the model's very early growth is probably too slow and is only a rough guide. The bubble rising and its later pulses are left out.],
   [Fallout before 1 hour], [The $t^(-1.2)$ rule only works from about 1 hour on, so the first hour of fallout dose isn't counted. The time particles spend rising and falling out of the cloud isn't included either.],
 )
 

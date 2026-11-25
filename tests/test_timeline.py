@@ -112,3 +112,22 @@ def test_timeline_effect_levels_match_assess():
     direct = assess(Burst(1000, 10), Receiver(1500, 0, -10, "fish", mass_kg=0.5))
     assert [(e["name"], e["level"]) for e in fish["effects"]] == [(e.name, e.level) for e in direct.effects]
     assert underwater_shock  # imported model used by the near-surface/underwater paths
+
+
+def test_bubble_reaches_cole_maximum_at_rayleigh_time():
+    b, env = Burst(yield_kt=100, z_m=-300), Environment()
+    bub = tl._bubble(b, env, [])
+    assert not bub["vents"]
+    assert max(bub["radius_m"]) == pytest.approx(tl.bubble_max_radius_m(100, 300), rel=1e-4)
+    t_peak = bub["t_s"][int(max(range(len(bub["radius_m"])), key=lambda i: bub["radius_m"][i]))]
+    p = env.hydrostatic_pressure_pa(300)
+    assert t_peak == pytest.approx(0.915 * bub["max_radius_m"] * math.sqrt(env.density_kg_m3 / p), rel=0.01)
+
+
+def test_shallow_bubble_vents_and_air_burst_has_none():
+    j = post({"yield_kt": 23, "z_m": -27}, env={"water_depth_m": 55})
+    bub = j["bubble"]
+    assert bub["vents"] and 0.001 < bub["vent_s"] < 0.1
+    assert bub["radius_m"][-1] == pytest.approx(27)
+    assert any(e["label"] == "gas bubble reaches the surface" for e in j["events"])
+    assert post({"yield_kt": 15, "z_m": 580})["bubble"] is None

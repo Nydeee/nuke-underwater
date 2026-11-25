@@ -7,6 +7,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { initTimeline } from "./timeline.js";   // time slider (see timeline.js)
 import { makeModel } from "./models.js";
 import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
+import { createFreecam, createCameraTween } from "./freecam.js";   // WASD free camera, smooth camera moves
+import { units, setSystem, readInput, writeInput, fmtLen, fmtDepth, chartUnits } from "./units.js";
+import { store, toast, attachMenu, closeMenus, openModal, closeModal, anyModalOpen, askText, download, runTour, esc } from "./ui.js";
 
 // ---------------------------------------------------------------- talking to the server
 async function api(path, body) {
@@ -32,18 +35,18 @@ const $ = (id) => document.getElementById(id);
 
 function scenario() {
   const y = parseFloat($("yield").value) * parseFloat($("yieldUnit").value);
-  const d = parseFloat($("burstDist").value) || 0;
+  const d = readInput($("burstDist")) || 0;
   return {
     burst: {
       yield_kt: y,
       z_m: $("side").value === "above" ? d : -d,
       fission_fraction: Math.min(Math.max(parseFloat($("fission").value) / 100, 0.01), 1),
-      wind_mph: parseFloat($("wind").value) || 15,
+      wind_mph: readInput($("wind")) || 15,
     },
-    env: { water_depth_m: $("deepOcean").checked ? null : parseFloat($("waterDepth").value) },
+    env: { water_depth_m: $("deepOcean").checked ? null : readInput($("waterDepth")) },
   };
 }
-const view = () => ({ R: parseFloat($("maxRange").value) * 1000, D: parseFloat($("maxDepth").value), s: parseFloat($("stretch").value) });
+const view = () => ({ R: (readInput($("maxRange")) || 3) * 1000, D: readInput($("maxDepth")) || 100, s: parseFloat($("stretch").value) });
 
 // Scene units: 1 unit = 1 km horizontally. The water is drawn so that the depth
 // shown takes up a chosen percentage of the distance shown (slider); heights above
@@ -55,7 +58,8 @@ const fromY = (y) => (y < 0 ? y / waterScale() : y * 1000);
 // ---------------------------------------------------------------- three.js scene
 const host = $("scene");
 const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+const QUALITY = { high: 2, balanced: 1.35, low: 1 };
+const applyQuality = (q) => { renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[q] || 2)); resize(); };
 host.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = (() => {   // soft vertical gradient behind the technical view
@@ -68,6 +72,7 @@ scene.background = (() => {   // soft vertical gradient behind the technical vie
 const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 5000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+const techTween = createCameraTween(camera, controls);
 scene.add(new THREE.HemisphereLight(0xdfeaff, 0x1a2a3a, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(3, 10, 6);
@@ -83,7 +88,7 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  realistic?.resize(w, h);
+  if (realistic) realistic.resize(w, h);
 }
 window.addEventListener("resize", resize);
 new ResizeObserver(resize).observe(host);
@@ -173,14 +178,14 @@ function buildStatic() {
   // labels: distances along the cut-away, and depths
   for (let i = 0; i <= 4; i++) {
     const x = (Rk * i) / 4;
-    const l = textSprite(`${(x).toFixed(x < 10 ? 1 : 0)} km`);
+    const l = textSprite(fmtLen(x * 1000));
     l.position.set(x, 0.08, 0.02);
     l.scale.multiplyScalar(Rk / 2.5);
     staticGroup.add(l);
   }
   for (let i = 1; i <= 4; i++) {
     const z = -(D * i) / 4;
-    const l = textSprite(`${Math.round(-z)} m deep`, "#8ea2b5");
+    const l = textSprite(`${fmtDepth(-z)} deep`, "#8ea2b5");
     l.position.set(-Rk * 0.06, toY(z), 0.02);
     l.scale.multiplyScalar(Rk / 2.5);
     staticGroup.add(l);
@@ -207,14 +212,20 @@ function buildReceivers() {
   state.receivers.forEach((r) => receiverGroup.add(receiverMesh(r)));
 }
 
-function frameCamera() {
+// technical-view camera presets (scene units: km)
+function techPreset(name = "overview", instant = false) {
   const { R, D } = view();
   const Rk = R / 1000, dy = toY(-D);
-  const top = Math.max(toY(scenario().burst.z_m), 0);
-  controls.target.set(Rk * 0.42, (dy + top) * 0.45, 0);
-  camera.position.set(Rk * 0.55, Rk * 0.4 + top * 0.5, Rk * 1.75 + top);
-  controls.update();
+  const bz = toY(scenario().burst.z_m), top = Math.max(bz, 0);
+  const P = new THREE.Vector3(), T = new THREE.Vector3();
+  const fit = Math.max(1, Math.pow(1.45 / camera.aspect, 0.6));   // step back on narrow screens so everything fits
+  if (name === "side") { T.set(Rk * 0.5, (dy + top) * 0.5, 0); P.set(Rk * 0.5, (dy + top) * 0.5, (Rk * 1.45 + top) * fit); }
+  else if (name === "top") { T.set(Rk * 0.5, 0, 0); P.set(Rk * 0.5, Rk * 1.9 + top, 0.001); }
+  else if (name === "burst") { T.set(0, bz * 0.6, 0); P.set(Rk * 0.32, Rk * 0.16 + Math.abs(bz) * 0.6, Rk * 0.42 + Math.abs(bz)); }
+  else { T.set(Rk * (fit > 1.05 ? 0.34 : 0.42), (dy + top) * 0.45, 0); P.set(Rk * 0.55, Rk * 0.4 + top * 0.5, Rk * 1.75 * fit + top); }
+  techTween.to(P, T, 1.0, instant);
 }
+const frameCamera = (instant = true) => techPreset("overview", instant);
 
 // ---------------------------------------------------------------- dragging receivers on the cut-away
 const raycaster = new THREE.Raycaster();
@@ -230,7 +241,7 @@ function pick(ev) {
 
 renderer.domElement.addEventListener("pointerdown", (ev) => {
   pick(ev);
-  if (mode !== "technical") return;
+  if (mode !== "technical" || freecam.active) return;
   const hit = raycaster.intersectObjects(receiverGroup.children, true)[0];
   if (hit) {
     dragging = hit.object.userData.id;
@@ -279,10 +290,10 @@ function renderList() {
     const li = document.createElement("li");
     if (r.id === state.selected) li.className = "selected";
     const color = levelColor(state.results[r.id]);
-    const where = r.kind === "person" ? "on deck" : `${Math.round(-r.z_m)} m deep`;
-    li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${r.emoji} ${r.label}</span>
-      <button class="del" title="Remove">✕</button></div>
-      <div class="hint">${(r.x_m / 1000).toFixed(2)} km out, ${where}</div>`;
+    const where = r.kind === "person" ? "on deck" : `${fmtDepth(-r.z_m)} deep`;
+    li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${esc(r.emoji)} ${esc(r.label)}</span>
+      <button class="del" title="Remove (Delete)">✕</button></div>
+      <div class="hint">${fmtLen(r.x_m)} out, ${where}</div>`;
     if (r.kind !== "person") {
       const props = document.createElement("div");
       props.className = "props";
@@ -295,15 +306,28 @@ function renderList() {
       props.addEventListener("click", (e) => e.stopPropagation());
       li.appendChild(props);
     }
-    li.querySelector(".del").addEventListener("click", (e) => {
-      e.stopPropagation();
-      state.receivers = state.receivers.filter((x) => x.id !== r.id);
-      if (state.selected === r.id) state.selected = null;
-      buildReceivers(); renderList(); renderReport();
-    });
+    li.querySelector(".del").addEventListener("click", (e) => { e.stopPropagation(); removeReceiver(r.id); });
     li.addEventListener("click", () => select(r.id));
     ul.appendChild(li);
   }
+}
+
+let lastRemoved = null;
+function removeReceiver(id) {
+  const i = state.receivers.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  lastRemoved = { r: state.receivers[i], i };
+  state.receivers.splice(i, 1);
+  if (state.selected === id) state.selected = null;
+  buildReceivers(); renderList(); renderReport(); if (mode === "realistic") realistic.rebuildReceivers();
+  toast(`Removed ${lastRemoved.r.label}`, { action: { label: "Undo", fn: undoRemove } });
+}
+function undoRemove() {
+  if (!lastRemoved) return false;
+  state.receivers.splice(Math.min(lastRemoved.i, state.receivers.length), 0, lastRemoved.r);
+  state.selected = lastRemoved.r.id; lastRemoved = null;
+  buildReceivers(); renderList(); scheduleAssess();
+  return true;
 }
 
 // Colour: the most likely outcome when uncertainty is shown, otherwise the single best-estimate outcome.
@@ -325,7 +349,6 @@ function select(id) {
   buildReceivers(); renderList(); renderReport(); loadFallout();
 }
 
-function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 
 function renderReport() {
   const box = $("report");
@@ -336,9 +359,9 @@ function renderReport() {
   if (res.error) { box.innerHTML = `<p class="error">${esc(res.error)}</p>`; return; }
   const u = res.uncertain;
   const expert = detail === "expert";
-  const where = r.kind === "person" ? "on deck" : `${Math.round(-r.z_m)} m deep`;
-  let html = `<div class="summaryCard"><div class="big">${r.emoji} ${esc(r.label)}</div>
-    <div class="help">${(r.x_m / 1000).toFixed(2)} km from ground zero, ${where}</div>
+  const where = r.kind === "person" ? "on deck" : `${fmtDepth(-r.z_m)} deep`;
+  let html = `<div class="summaryCard"><div class="big">${esc(r.emoji)} ${esc(r.label)}</div>
+    <div class="help">${fmtLen(r.x_m)} from ground zero, ${where}</div>
     <div style="margin-top:6px">Worst effect: <span class="level lv-${res.worst}">${res.worst}</span>
     ${u ? ` · most likely: <span class="level lv-${u.most_likely}">${u.most_likely}</span>` : ""}</div>
     ${u ? `${probBar(u.level_probs)}<div class="help">chance of each worst outcome over ${u.n} runs</div>` : ""}</div>`;
@@ -370,16 +393,17 @@ function scheduleAssess() { clearTimeout(assessTimer); assessTimer = setTimeout(
 async function runAssess() {
   const sc = scenario();
   if (!(sc.burst.yield_kt > 0)) return;
-  $("status").textContent = "Calculating…";
+  setStatus("Calculating…", true);
   try {
     const unc = $("uncertainty").checked;
     const data = await api("/api/assess", { ...sc, uncertainty: unc, n_samples: parseInt($("nSamples").value) || 200, receivers: state.receivers.map(({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
       ({ id, kind, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })) });
     state.results = Object.fromEntries(data.receivers.map((x) => [x.id, x]));
-    $("status").textContent = `Updated · ${state.receivers.length} in the sea`;
+    setStatus(`Up to date · ${state.receivers.length} in the sea`);
     if (mode === "realistic") realistic.rebuildReceivers();
   } catch (err) {
-    $("status").textContent = `Error: ${err.message}`;
+    setStatus(`Error: ${err.message}`);
+    toast(`Could not calculate: ${err.message}`, { kind: "err" });
   }
   buildReceivers(); renderList(); renderReport(); loadFallout();
 }
@@ -387,7 +411,7 @@ async function runAssess() {
 async function refreshScenario() {
   const sc = scenario();
   if (!(sc.burst.yield_kt > 0)) {
-    $("status").textContent = "Enter a yield above zero.";
+    setStatus("Enter a yield above zero.");
     $("burstInfo").innerHTML = "<b>No burst: the yield must be above zero.</b>";
     state.results = {}; buildReceivers(); renderList();
     $("report").innerHTML = `<p class="hint">No burst to assess.</p>`;
@@ -399,16 +423,22 @@ async function refreshScenario() {
   if (!(sc.burst.yield_kt > 0)) return;
   try {
     info = await api("/api/info", sc);
-    const parts = [`<b>${esc(info.regime)}</b>`,
-      info.fireball_radius_m ? `fireball radius about ${Math.round(info.fireball_radius_m)} m` : null,
-      info.coupling != null ? `shock coupling into the water: ${(info.coupling * 100).toFixed(info.coupling < 0.1 ? 1 : 0)}%` : null,
-      info.crater_radius_m ? `water crater about ${Math.round(info.crater_radius_m)} m radius, ${Math.round(info.crater_depth_m)} m deep` : null,
-      sc.burst.z_m >= 0 ? (info.local_fallout ? "local fallout: yes" : "local fallout: none (burst too high)") : null];
-    if (mode === "realistic") realistic.setPreset("aerial");
-    $("burstInfo").innerHTML = parts.filter(Boolean).join("<br>");
+    renderBurstInfo();
+    if (mode === "realistic" && !freecam.active) realistic.setPreset("aerial");
   } catch (err) { $("burstInfo").textContent = err.message; }
   state.overlay = null; $("legend").innerHTML = "";
   buildStatic(); buildReceivers(); scheduleAssess(); loadWaves();
+}
+
+function renderBurstInfo() {
+  if (!info) return;
+  const sc = scenario();
+  const parts = [`<b>${esc(info.regime)}</b>`,
+    info.fireball_radius_m ? `fireball radius about ${fmtLen(info.fireball_radius_m)}` : null,
+    info.coupling != null ? `shock coupling into the water: ${(info.coupling * 100).toFixed(info.coupling < 0.1 ? 1 : 0)}%` : null,
+    info.crater_radius_m ? `water crater about ${fmtLen(info.crater_radius_m)} radius, ${fmtDepth(info.crater_depth_m)} deep` : null,
+    sc.burst.z_m >= 0 ? (info.local_fallout ? "local fallout: yes" : "local fallout: none (burst too high)") : null];
+  $("burstInfo").innerHTML = parts.filter(Boolean).join("<br>");
 }
 
 // ---------------------------------------------------------------- overlays
@@ -423,13 +453,13 @@ async function computeOverlay() {
   const kind = $("overlay").value;
   if (kind === "none") { state.overlay = null; $("legend").innerHTML = ""; buildStatic(); return; }
   const { R, D } = view();
-  $("status").textContent = "Computing overlay (can take a few seconds)…";
+  setStatus("Computing overlay (can take a few seconds)…", true);
   try {
     const data = await api("/api/field", { ...scenario(), kind, zones_kind: $("zonesKind").value, max_range_m: R, max_depth_m: D, nr: 48, nd: 30 });
     state.overlay = { kind, data };
     buildStatic(); buildReceivers();
-    $("status").textContent = data.message || "Overlay ready";
-  } catch (err) { $("status").textContent = `Error: ${err.message}`; }
+    setStatus(data.message || "Overlay ready");
+  } catch (err) { setStatus(`Error: ${err.message}`); toast(err.message, { kind: "err" }); }
 }
 
 function applyOverlayTexture() {
@@ -503,12 +533,12 @@ function chart(canvas, series, { xlabel, ylabel, logx = true, logy = true }) {
 async function loadWaves() {
   try {
     const d = await api("/api/waves", { ...scenario(), max_range_m: 100000 });
-    const km = d.ranges_m.map((r) => r / 1000);
-    chart($("waveChart"), [{ x: km, y: d.high_m, color: "#4fa3d9" }, { x: km, y: d.low_m, color: "#4fa3d9", dash: [4, 3] }],
-      { xlabel: "distance (km)", ylabel: "wave height (m)" });
+    const cu = chartUnits(), km = d.ranges_m.map((r) => (r / 1000) * cu.dist), h = (a) => a.map((v) => v * cu.height);
+    chart($("waveChart"), [{ x: km, y: h(d.high_m), color: "#4fa3d9" }, { x: km, y: h(d.low_m), color: "#4fa3d9", dash: [4, 3] }],
+      { xlabel: `distance (${cu.distLabel})`, ylabel: `wave height (${cu.heightLabel})` });
     $("waveInfo").textContent = d.regime.startsWith("air")
       ? "Air burst: the fireball doesn't reach the water, so waves are negligible."
-      : `${d.regime}: solid = upper, dashed = lower estimate. Period about ${Math.round(d.period_s)} s, wavelength about ${(d.wavelength_m / 1000).toFixed(1)} km.`;
+      : `${d.regime}: solid = upper, dashed = lower estimate. Period about ${Math.round(d.period_s)} s, wavelength about ${fmtLen(d.wavelength_m)}.`;
   } catch (err) { $("waveInfo").textContent = err.message; }
 }
 
@@ -534,7 +564,7 @@ async function loadFallout() {
 
 // ---------------------------------------------------------------- wiring
 document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addReceiver(b.dataset.add)));
-["yield", "yieldUnit", "side", "burstDist", "fission", "wind", "waterDepth"].forEach((id) => $(id).addEventListener("change", refreshScenario));
+["yield", "yieldUnit", "side", "burstDist", "fission", "wind", "waterDepth"].forEach((id) => $(id).addEventListener("change", () => { $("presetSel").value = ""; refreshScenario(); }));
 $("deepOcean").addEventListener("change", () => { $("waterDepth").disabled = $("deepOcean").checked; refreshScenario(); });
 ["maxRange", "maxDepth"].forEach((id) => $(id).addEventListener("change", () => { state.overlay = null; $("legend").innerHTML = ""; buildStatic(); buildReceivers(); frameCamera(); }));
 $("stretch").addEventListener("input", () => { $("stretchVal").textContent = `${$("stretch").value}%`; buildStatic(); buildReceivers(); });
@@ -543,28 +573,100 @@ $("computeOverlay").addEventListener("click", computeOverlay);
 $("uncertainty").addEventListener("change", scheduleAssess);
 $("nSamples").addEventListener("change", scheduleAssess);
 
-// ---------------------------------------------------------------- view mode, detail level, presets, help
+// ---------------------------------------------------------------- status pill
+function setStatus(text, busy = false) {
+  $("status").querySelector(".txt").textContent = text;
+  $("status").classList.toggle("busy", busy);
+}
+
+// ---------------------------------------------------------------- preferences (this browser only)
+const prefs = Object.assign({ units: "metric", quality: "high", autoPlay: true, pins: true, hideLeft: false, hideRight: false, lw: null, rw: null, detail: "basic" },
+  store.get("prefs", {}));
+const savePrefs = () => store.set("prefs", prefs);
+
+// ---------------------------------------------------------------- view mode, detail level, camera bar
 let mode = "technical", detail = "basic", realistic = null;
 
+const CAMS = {
+  technical: [["overview", "Overview"], ["side", "Side-on"], ["top", "Top-down"], ["burst", "Burst close-up"]],
+  realistic: [["aerial", "Aerial"], ["side", "Side"], ["boat", "From a boat"], ["far", "Far away"], ["under", "Underwater"]],
+};
+function buildCamBar() {
+  const list = CAMS[mode];
+  $("camBar").innerHTML = `<span class="lbl">Camera</span>` +
+    list.map(([k, l], i) => `<button data-cam="${k}" title="${l} (${i + 1})">${l}</button>`).join("") +
+    `<button data-cam="free" class="free" title="Fly freely with W A S D and the mouse (F)">✈ Free <kbd>F</kbd></button>`;
+  $("camBar").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setCam(b.dataset.cam)));
+  markCam();
+}
+let currentCam = "overview";
+function markCam() {
+  $("camBar").querySelectorAll("button").forEach((b) => b.classList.toggle("on", freecam.active ? b.dataset.cam === "free" : b.dataset.cam === currentCam));
+}
+function setCam(name) {
+  if (name === "free") { freecam.active ? stopFree() : startFree(); return; }
+  if (freecam.active) stopFree(false);
+  currentCam = name;
+  if (mode === "realistic") realistic.setPreset(name); else techPreset(name);
+  markCam();
+}
+
+// ---------------------------------------------------------------- free camera
+const freecam = createFreecam({ dom: renderer.domElement, onChange: updateFlyHint });
+function activeCam() { return mode === "realistic" ? realistic.camera : camera; }
+function activeControls() { return mode === "realistic" ? realistic.controls : controls; }
+function startFree() {
+  activeControls().enabled = false;
+  (mode === "realistic" ? realistic.tween : techTween).cancel();
+  const speed = mode === "realistic"
+    ? (p) => Math.max(10, Math.abs(p.y) * 0.25)                 // metres per second, faster when high up
+    : (p) => Math.max(view().R / 1000 * 0.15, Math.abs(p.y) * 0.4);   // km per second
+  freecam.enable(activeCam(), speed);
+  markCam();
+}
+function stopFree(keepView = true) {
+  if (!freecam.active) return;
+  const cam = activeCam(), c = activeControls();
+  freecam.disable();
+  if (keepView) {   // hand the camera back to the orbit controls, looking where it was looking
+    const dist = mode === "realistic" ? Math.max(150, Math.abs(cam.position.y)) : view().R / 1000 * 0.4;
+    c.target.copy(freecam.lookPoint(dist));
+  }
+  c.enabled = true; c.update();
+  markCam();
+}
+function updateFlyHint() {
+  const h = $("flyHint");
+  h.hidden = !freecam.active;
+  if (!freecam.active) return;
+  h.innerHTML = freecam.locked
+    ? `<b>Free camera</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>E</kbd>/<kbd>Q</kbd> up/down · <kbd>Shift</kbd> faster · wheel: speed ×${freecam.speed.toPrecision(2)} · <kbd>Esc</kbd> release mouse`
+    : `<b>Free camera</b> · click the scene to look around · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> still move · <kbd>F</kbd> to leave`;
+  markCam();
+}
+
 function setMode(m) {
+  if (m === mode && realistic) { buildCamBar(); return; }
+  stopFree(false);
   mode = m;
   document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.view === m));
   const real = m === "realistic";
   document.body.classList.toggle("real", real);
-  $("camBar").hidden = !real;
   $("techViewBox").hidden = real;
   controls.enabled = !real;
   realistic.setActive(real);
   renderer.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   renderer.toneMappingExposure = real ? 0.5 : 1;
+  currentCam = real ? "aerial" : "overview";
+  buildCamBar();
   if (real) {
-    realistic.setPreset("aerial");
-    if (timeline.isAtEnd()) { timeline.setTime(0); timeline.play(); }   // start the show from the flash
+    realistic.setPreset("aerial", true);
+    if (prefs.autoPlay && timeline.isAtEnd()) { timeline.setTime(0); timeline.play(); }   // start the show from the flash
   }
 }
 
 function setDetail(d) {
-  detail = d;
+  detail = d; prefs.detail = d; savePrefs();
   document.body.classList.toggle("basic", d === "basic");
   document.body.classList.toggle("expert", d === "expert");
   document.querySelectorAll("#detailSeg button").forEach((b) => b.classList.toggle("on", b.dataset.detail === d));
@@ -572,6 +674,7 @@ function setDetail(d) {
   renderReport();
 }
 
+// ---------------------------------------------------------------- example scenarios
 const SCENARIOS = {
   hiroshima:  { yield: 15, unit: 1, side: "above", dist: 580, deep: true, range: 3, depth: 100 },
   baker:      { yield: 23, unit: 1, side: "below", dist: 27, deep: false, water: 55, range: 3, depth: 55 },
@@ -582,41 +685,315 @@ const SCENARIOS = {
 function applyScenario(key) {
   const s = SCENARIOS[key];
   if (!s) return;
-  $("yield").value = s.yield; $("yieldUnit").value = s.unit; $("side").value = s.side; $("burstDist").value = s.dist;
-  $("deepOcean").checked = s.deep; $("waterDepth").disabled = s.deep; if (s.water) $("waterDepth").value = s.water;
-  $("maxRange").value = s.range; $("maxDepth").value = s.depth;
+  $("yield").value = s.yield; $("yieldUnit").value = s.unit; $("side").value = s.side; writeInput($("burstDist"), s.dist);
+  $("deepOcean").checked = s.deep; $("waterDepth").disabled = s.deep; if (s.water) writeInput($("waterDepth"), s.water);
+  writeInput($("maxRange"), s.range); writeInput($("maxDepth"), s.depth);
   // spread the existing things in the sea across the new distance shown
   state.receivers.forEach((r, i) => { r.x_m = s.range * 1000 * (0.25 + 0.6 * (i + 0.5) / Math.max(state.receivers.length, 1)); });
-  frameCamera();
+  if (mode === "technical") frameCamera(false);
   refreshScenario();
   timeline.setTime(0);
 }
 
+// ---------------------------------------------------------------- save, open and share
+function serialize() {
+  return {
+    app: "nukesim", v: 1,
+    burst: { yield: +$("yield").value, unit: +$("yieldUnit").value, side: $("side").value, dist_m: readInput($("burstDist")),
+      wind_mph: readInput($("wind")), fission_pct: +$("fission").value },
+    sea: { deep: $("deepOcean").checked, depth_m: readInput($("waterDepth")) },
+    view: { range_km: readInput($("maxRange")), depth_m: readInput($("maxDepth")), stretch: +$("stretch").value, mode, detail },
+    uncertainty: $("uncertainty").checked, runs: +$("nSamples").value,
+    receivers: state.receivers.map(({ preset, kind, label, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group }) =>
+      ({ preset, kind, label, x_m, y_m, z_m, mass_kg, swim_bladder, hearing_group })),
+    t_s: timeline.getTime(),
+  };
+}
+const num = (v, lo, hi, d) => (Number.isFinite(+v) && v !== null && v !== "" ? Math.min(Math.max(+v, lo), hi) : d);
+function applySaved(o) {
+  if (!o || o.app !== "nukesim" || !o.burst) throw new Error("This is not a nukesim scenario file.");
+  const b = o.burst, sea = o.sea || {}, v = o.view || {};
+  $("yield").value = num(b.yield, 0.001, 1e6, 20); $("yieldUnit").value = b.unit === 1000 ? "1000" : "1";
+  $("side").value = b.side === "below" ? "below" : "above";
+  writeInput($("burstDist"), num(b.dist_m, 0, 1e5, 500)); writeInput($("wind"), num(b.wind_mph, 1, 120, 15));
+  $("fission").value = num(b.fission_pct, 1, 100, 100);
+  $("deepOcean").checked = sea.deep !== false; $("waterDepth").disabled = $("deepOcean").checked;
+  writeInput($("waterDepth"), num(sea.depth_m, 1, 11000, 200));
+  writeInput($("maxRange"), num(v.range_km, 0.1, 1000, 3)); writeInput($("maxDepth"), num(v.depth_m, 1, 11000, 100));
+  $("stretch").value = num(v.stretch, 5, 100, 35); $("stretchVal").textContent = `${$("stretch").value}%`;
+  $("uncertainty").checked = !!o.uncertainty; $("nSamples").value = num(o.runs, 20, 2000, 200);
+  state.receivers = []; state.results = {}; state.nextId = 1;
+  for (const r of o.receivers || []) {
+    const p = PRESETS[r.preset];
+    if (!p) continue;
+    const id = `${r.preset}-${state.nextId++}`;
+    state.receivers.push({ id, preset: r.preset, kind: p.kind, label: String(r.label || `${p.label} ${state.nextId - 1}`).slice(0, 60), emoji: p.emoji,
+      x_m: num(r.x_m, 0, 1e7, 1000), y_m: num(r.y_m, -1e7, 1e7, 0), z_m: p.kind === "person" ? 2 : num(r.z_m, -11000, -0.3, p.z_m),
+      mass_kg: r.mass_kg == null ? p.mass_kg ?? null : num(r.mass_kg, 0.001, 2e5, p.mass_kg ?? null),
+      swim_bladder: r.swim_bladder !== false, hearing_group: ["LF", "HF", "VHF", "PW", "OW"].includes(r.hearing_group) ? r.hearing_group : p.hearing_group ?? null });
+  }
+  state.selected = state.receivers[0]?.id ?? null;
+  $("presetSel").value = "";
+  setDetail(v.detail === "expert" ? "expert" : "basic");
+  setMode(v.mode === "realistic" ? "realistic" : "technical");
+  if (mode === "technical") frameCamera(false);
+  buildReceivers(); renderList(); refreshScenario();
+  if (Number.isFinite(+o.t_s)) timeline.setTime(+o.t_s);
+}
+
+let currentName = null;
+const savedList = () => store.get("saved", []);
+async function saveAs() {
+  const name = await askText("Save scenario as", currentName || defaultName());
+  if (!name) return;
+  const list = savedList().filter((x) => x.name !== name);
+  list.unshift({ name, at: new Date().toISOString(), data: serialize() });
+  if (store.set("saved", list.slice(0, 50))) { currentName = name; toast(`Saved "${name}"`, { kind: "ok" }); }
+  else toast("This browser won't let the page store data. Use Export to file instead.", { kind: "err" });
+}
+function defaultName() {
+  const y = +$("yield").value * +$("yieldUnit").value;
+  return `${y >= 1000 ? `${+(y / 1000).toPrecision(3)} Mt` : `${y} kt`} ${$("side").value === "above" ? "above" : "below"} the sea`;
+}
+const b64 = { enc: (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+  dec: (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))) };
+async function shareLink() {
+  const url = `${location.origin}${location.pathname}#s=${b64.enc(JSON.stringify(serialize()))}`;
+  try { await navigator.clipboard.writeText(url); toast("Link copied. Anyone running nukesim can open it to see this exact scenario.", { kind: "ok", ms: 5000 }); }
+  catch (_) { await askText("Copy this link", url, "Close"); }
+}
+function exportFile() {
+  download(`nukesim-${(currentName || defaultName()).replace(/[^\w.-]+/g, "_")}.json`, JSON.stringify(serialize(), null, 2));
+  toast("Scenario file saved to your downloads", { kind: "ok" });
+}
+$("importFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try { applySaved(JSON.parse(await f.text())); currentName = f.name.replace(/^nukesim-|\.json$/g, ""); toast(`Opened ${f.name}`, { kind: "ok" }); }
+  catch (err) { toast(`Could not open that file: ${err.message}`, { kind: "err" }); }
+});
+function startOver() {
+  applySaved({ app: "nukesim", burst: { yield: 20, unit: 1, side: "above", dist_m: 500, wind_mph: 15, fission_pct: 100 }, sea: { deep: true, depth_m: 200 },
+    view: { range_km: 3, depth_m: 100, stretch: 35, mode, detail }, receivers: [{ preset: "fish", x_m: 1200, z_m: -10 }, { preset: "dolphin", x_m: 1800, z_m: -10 }, { preset: "boat", x_m: 2400 }] });
+  currentName = null; timeline.setTime(0);
+}
+
+attachMenu($("saveBtn"), () => {
+  const saved = savedList();
+  return [
+    { icon: "💾", label: "Save as…", kbd: "⌘S", action: saveAs },
+    { icon: "🔗", label: "Copy share link", action: shareLink },
+    "-",
+    { icon: "⤓", label: "Export to file (.json)", action: exportFile },
+    { icon: "📂", label: "Open file…", action: () => $("importFile").click() },
+    { icon: "↺", label: "Start over", action: startOver },
+    "-",
+    { html: saved.length ? `<div class="menuHead">Saved in this browser</div>` + saved.map((x, i) =>
+        `<div class="savedRow" data-i="${i}"><button class="load" title="Open">${esc(x.name)}<small>${new Date(x.at).toLocaleString()}</small></button><button class="rm" title="Delete">✕</button></div>`).join("")
+        : `<div class="menuHead">No saved scenarios yet</div>`,
+      onMount(d) {
+        d.querySelectorAll(".savedRow").forEach((row) => {
+          const x = saved[+row.dataset.i];
+          row.querySelector(".load").addEventListener("click", () => { closeMenus(); applySaved(x.data); currentName = x.name; toast(`Opened "${x.name}"`, { kind: "ok" }); });
+          row.querySelector(".rm").addEventListener("click", (e) => {
+            e.stopPropagation();
+            store.set("saved", savedList().filter((y) => y.name !== x.name)); row.remove();
+            toast(`Deleted "${x.name}"`, { action: { label: "Undo", fn: () => store.set("saved", [x, ...savedList()]) } });
+          });
+        });
+      } },
+  ];
+});
+
+// ---------------------------------------------------------------- export results
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+function screenshot() {
+  const real = mode === "realistic";
+  renderer.render(real ? realistic.scene : scene, activeCam());     // draw now so the picture isn't blank
+  download(`nukesim-${stamp()}.png`, renderer.domElement.toDataURL("image/png"));
+  toast("Picture saved to your downloads", { kind: "ok" });
+}
+function resultsCSV() {
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const sc = scenario();
+  const rows = [["# nukesim results", new Date().toISOString()], ["# yield_kt", sc.burst.yield_kt], ["# burst_height_m (negative = depth)", sc.burst.z_m],
+    ["# wind_mph", sc.burst.wind_mph], ["# water_depth_m", sc.env.water_depth_m ?? "deep ocean"],
+    ["thing", "kind", "distance_m", "depth_m", "worst", "effect", "level", "value", "threshold", "source"]];
+  for (const r of state.receivers) {
+    const res = state.results[r.id];
+    for (const e of res?.effects || [{}]) rows.push([r.label, r.kind, Math.round(r.x_m), r.kind === "person" ? 0 : +(-r.z_m).toFixed(1), res?.worst ?? "", e.name, e.level, e.value, e.criterion, e.source]);
+  }
+  download(`nukesim-results-${stamp()}.csv`, rows.map((row) => row.map(q).join(",")).join("\n"), "text/csv");
+  toast("Results table saved to your downloads", { kind: "ok" });
+}
+function resultsJSON() {
+  download(`nukesim-results-${stamp()}.json`, JSON.stringify({ scenario: serialize(), burst: info, results: state.results }, null, 2));
+  toast("Full results saved to your downloads", { kind: "ok" });
+}
+attachMenu($("exportBtn"), () => [
+  { icon: "🖼", label: "Picture of the 3D view (PNG)", kbd: "P", action: screenshot },
+  { icon: "▦", label: "Results table (CSV, for Excel)", action: resultsCSV, disabled: !state.receivers.length },
+  { icon: "{ }", label: "Full results (JSON)", action: resultsJSON },
+]);
+
+// ---------------------------------------------------------------- help menu, tour, settings
+attachMenu($("helpBtn"), () => [
+  { icon: "🧭", label: "Guided tour", action: startTour },
+  { icon: "⌨", label: "Keyboard shortcuts", kbd: "?", action: () => openModal("shortcutsModal") },
+  { icon: "ⓘ", label: "Quick start", action: () => openModal("helpModal") },
+]);
+function startTour() {
+  closeModal("helpModal"); store.set("helpSeen", 1);
+  if (prefs.hideLeft) togglePanel("left"); if (prefs.hideRight) togglePanel("right");
+  runTour([
+    { el: "#presetSel", title: "Start from an example", text: "Pick a ready-made scenario, such as a Hiroshima-sized air burst or the 1946 BAKER test. It fills in everything for you." },
+    { el: "#controls details", title: "Set up the burst", text: "Or set it yourself: the <b>yield</b>, whether it goes off <b>above or below</b> the water, and the wind." },
+    { el: "#addButtons", title: "Put things in the sea", text: "Add fish, whales, dolphins, turtles, divers and boats. Each one is coloured by what happens to it, from green (nothing) to dark red (lethal)." },
+    { el: "#scene", title: "The 3D view", text: "Drag to turn the view, scroll to zoom. In the technical view, drag an animal along the cut-away to move it, and click one to see its results." },
+    { el: "#camBar", title: "Cameras", text: "Jump to a preset view, or press <kbd>F</kbd> for the <b>free camera</b>: fly with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> and look with the mouse." },
+    { el: "#timeline", title: "The timeline", text: "Play the event from the first microsecond to weeks later. The coloured marks are when each effect arrives. <kbd>Space</kbd> plays and pauses." },
+    { el: "#viewSeg", title: "Technical or realistic", text: "<b>Technical</b> is the scientific cut-away with overlays. <b>Realistic</b> shows the ocean, sky, fireball, mushroom cloud and waves as they would look." },
+    { el: "#detailSeg", title: "Basic or expert", text: "Basic shows the key numbers. Expert adds every threshold, source, uncertainty setting and caveat." },
+    { el: "#results", title: "Results", text: "Everything that happens to the selected thing: blast, hearing, burns, radiation and fallout, with the numbers behind each. Tick <b>Show uncertainty</b> for likely ranges." },
+    { el: "#saveBtn", title: "Save, share, export", text: "Save scenarios, copy a link that reopens exactly this setup, or export a picture and the results table." },
+    { el: "#helpBtn", title: "That's it", text: "Find this tour and all keyboard shortcuts here any time. Press <kbd>?</kbd> for the shortcut list." },
+  ]);
+}
+
+function applyUnits(sys) {
+  setSystem(sys); prefs.units = sys; savePrefs();
+  document.querySelectorAll("#unitSeg button").forEach((b) => b.classList.toggle("on", b.dataset.units === sys));
+}
+units.onChange(() => { buildStatic(); buildReceivers(); renderList(); renderReport(); renderBurstInfo(); loadWaves(); });
+document.querySelectorAll("#unitSeg button").forEach((b) => b.addEventListener("click", () => applyUnits(b.dataset.units)));
+function setQuality(q) {
+  prefs.quality = q; savePrefs(); applyQuality(q);
+  document.querySelectorAll("#qualitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.quality === q));
+}
+document.querySelectorAll("#qualitySeg button").forEach((b) => b.addEventListener("click", () => setQuality(b.dataset.quality)));
+$("autoPlay").addEventListener("change", (e) => { prefs.autoPlay = e.target.checked; savePrefs(); });
+$("showPins").addEventListener("change", (e) => { prefs.pins = e.target.checked; savePrefs(); realistic.setPins(prefs.pins); });
+$("resetPrefs").addEventListener("click", () => {
+  const saved = savedList();
+  store.clearAll(); store.set("saved", saved);
+  location.hash = ""; location.reload();
+});
+$("settingsBtn").addEventListener("click", () => openModal("settingsModal"));
+document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
+document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) m.hidden = true; }));
+$("helpClose").addEventListener("click", () => { closeModal("helpModal"); store.set("helpSeen", 1); });
+$("tourStart").addEventListener("click", startTour);
+
+// ---------------------------------------------------------------- side panels: hide and resize
+function layoutPanels() {
+  document.body.classList.toggle("hideLeft", prefs.hideLeft);
+  document.body.classList.toggle("hideRight", prefs.hideRight);
+  if (prefs.lw) document.body.style.setProperty("--lw", `${prefs.lw}px`);   // only once the user has dragged a panel edge
+  if (prefs.rw) document.body.style.setProperty("--rw", `${prefs.rw}px`);
+  $("toggleLeft").textContent = prefs.hideLeft ? "›" : "‹";
+  $("toggleRight").textContent = prefs.hideRight ? "‹" : "›";
+}
+function togglePanel(side) {
+  if (side === "left") prefs.hideLeft = !prefs.hideLeft; else prefs.hideRight = !prefs.hideRight;
+  savePrefs(); layoutPanels();
+}
+$("toggleLeft").addEventListener("click", () => togglePanel("left"));
+$("toggleRight").addEventListener("click", () => togglePanel("right"));
+document.querySelectorAll(".splitter").forEach((sp) => {
+  sp.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); sp.setPointerCapture(e.pointerId); document.body.classList.add("resizing");
+    const move = (ev) => {
+      if (sp.dataset.side === "left") prefs.lw = Math.round(Math.min(Math.max(ev.clientX, 230), 520));
+      else prefs.rw = Math.round(Math.min(Math.max(window.innerWidth - ev.clientX, 280), 640));
+      layoutPanels();
+    };
+    const up = () => { sp.removeEventListener("pointermove", move); sp.removeEventListener("pointerup", up); document.body.classList.remove("resizing"); savePrefs(); };
+    sp.addEventListener("pointermove", move); sp.addEventListener("pointerup", up);
+  });
+});
+
+// ---------------------------------------------------------------- keyboard shortcuts
+const typing = () => {
+  const a = document.activeElement;
+  return a && (a.tagName === "TEXTAREA" || a.tagName === "SELECT" || (a.tagName === "INPUT" && !["checkbox", "radio", "range", "button"].includes(a.type)));
+};
+const FLY_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyC", "Space"];
+window.addEventListener("keydown", (e) => {
+  if (typing() || document.querySelector(".tourCard")) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); saveAs(); return; }
+  if (mod && e.key.toLowerCase() === "z") { if (undoRemove()) e.preventDefault(); return; }
+  if (mod || e.altKey) return;
+  if (e.key === "Escape") {
+    closeMenus();
+    document.querySelectorAll(".modal").forEach((m) => { m.hidden = true; });
+    return;
+  }
+  if (anyModalOpen() || (freecam.active && FLY_KEYS.includes(e.code))) return;
+  const onTrack = document.activeElement?.classList.contains("tl-track");
+  const camBtns = [...$("camBar").querySelectorAll("button")];
+  switch (e.key) {
+    case "ArrowLeft": if (!onTrack) { timeline.step(-1); e.preventDefault(); } break;
+    case "ArrowRight": if (!onTrack) { timeline.step(1); e.preventDefault(); } break;
+    case "Home": timeline.toStart(); e.preventDefault(); break;
+    case "End": timeline.toEnd(); e.preventDefault(); break;
+    case "f": case "F": setCam("free"); break;
+    case "t": case "T": setMode("technical"); break;
+    case "r": case "R": setMode("realistic"); break;
+    case "x": case "X": setDetail(detail === "basic" ? "expert" : "basic"); break;
+    case "[": togglePanel("left"); break;
+    case "]": togglePanel("right"); break;
+    case "p": case "P": screenshot(); break;
+    case "?": openModal("shortcutsModal"); break;
+    case "Delete": case "Backspace": if (state.selected) { removeReceiver(state.selected); e.preventDefault(); } break;
+    default:
+      if (/^[1-9]$/.test(e.key) && camBtns[+e.key - 1]) camBtns[+e.key - 1].click();
+  }
+});
+
+// ---------------------------------------------------------------- start up
 document.querySelectorAll("#viewSeg button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.view)));
 document.querySelectorAll("#detailSeg button").forEach((b) => b.addEventListener("click", () => setDetail(b.dataset.detail)));
-document.querySelectorAll("#camBar [data-cam]").forEach((b) => b.addEventListener("click", () => realistic.setPreset(b.dataset.cam)));
-$("presetSel").addEventListener("change", (e) => applyScenario(e.target.value));
-$("helpBtn").addEventListener("click", () => { $("helpModal").hidden = false; });
-$("helpClose").addEventListener("click", () => {
-  $("helpModal").hidden = true;
-  try { localStorage.setItem("nukesim.helpSeen", "1"); } catch (_) { /* storage may be unavailable */ }
-});
-try { if (!localStorage.getItem("nukesim.helpSeen")) $("helpModal").hidden = false; } catch (_) { /* ignore */ }
+$("presetSel").addEventListener("change", (e) => { applyScenario(e.target.value); currentName = null; });
 
+layoutPanels();
+applyQuality(prefs.quality);
+document.querySelectorAll("#qualitySeg button").forEach((b) => b.classList.toggle("on", b.dataset.quality === prefs.quality));
+$("autoPlay").checked = prefs.autoPlay; $("showPins").checked = prefs.pins;
+writeInput($("wind"), 15);            // canonical wind is 15 mph, shown in the chosen units
+if (prefs.units !== "metric") applyUnits(prefs.units);
 resize();
 frameCamera();
 // ---------------------------------------------------------------- timeline hook (everything else is in timeline.js)
 const timeline = initTimeline({ THREE, scene, renderer, staticGroup, receiverGroup, state, scenario, view, toY, levelColor });
 realistic = initRealistic({ renderer, state, scenario, levelColor, timeline, getInfo: () => info });
+realistic.setPins(prefs.pins);
 $("viewNotes").innerHTML = realistic.notes.map((n) => `<li>${esc(n)}</li>`).join("");
+setDetail(prefs.detail);
+buildCamBar();
 resize();
+let lastFrame = performance.now();
 (function loop() {
   requestAnimationFrame(loop);
+  const now = performance.now(), dt = Math.min((now - lastFrame) / 1000, 0.1);
+  lastFrame = now;
   timeline.update();
+  freecam.update(dt);
   if (mode === "realistic") { realistic.update(); renderer.render(realistic.scene, realistic.camera); }
-  else { controls.update(); renderer.render(scene, camera); }
+  else { if (controls.enabled) { techTween.update(); controls.update(); } renderer.render(scene, camera); }
 })();
-addReceiver("fish");
-addReceiver("dolphin");
-addReceiver("boat");
-refreshScenario();
+
+// open a shared link (#s=...), otherwise the default scene
+let opened = false;
+if (location.hash.startsWith("#s=")) {
+  try { applySaved(JSON.parse(b64.dec(location.hash.slice(3)))); opened = true; toast("Opened the shared scenario", { kind: "ok" }); }
+  catch (err) { toast(`That link could not be opened: ${err.message}`, { kind: "err" }); }
+}
+if (!opened) {
+  addReceiver("fish");
+  addReceiver("dolphin");
+  addReceiver("boat");
+  refreshScenario();
+}
+if (!store.get("helpSeen", false) && !opened) openModal("helpModal");

@@ -37,9 +37,20 @@ number on screen comes from the same code that the tests check.]
 - *Scenario*: ready-made examples (a Hiroshima-sized air burst over the sea, Crossroads BAKER,
   1 Mt on the surface, a 1 Mt air burst and a deep underwater burst). Picking one fills in the
   burst, the sea and a few animals and boats, so you can start exploring straight away.
+- *Scenario menu*: save the setup under a name, open saved ones, copy a *share link*, export
+  the setup to a file or open one, and start over. See "Saving and sharing" below.
+- *Export menu*: a picture of the 3D view (PNG), the results as a table (CSV, opens in
+  Excel), or every result in full (JSON).
 - *Technical / Realistic*: the two ways of drawing the scene (see below).
 - *Basic / Expert*: how much detail you see (see below).
-- *Help*: a short "how to use" card. It also appears the first time you open the app.
+- *Settings* (the gear): metric or imperial units, graphics quality (lower it if the 3D view is slow),
+  whether the timeline plays by itself in the realistic view, marker pins on or off, and a button
+  that resets the layout and preferences.
+- *Help*: a guided tour that points at each part of the screen, the keyboard shortcuts, and the
+  quick-start card. The quick-start card appears the first time you open the app.
+
+*Side panels*: the small tabs at the edges of the 3D view (or the `[` and `]` keys) hide and show
+the side panels, to give the view more room. Drag a panel's inner edge to make it wider or narrower.
 
 *Left panel: the setup*, in folding sections:
 - *Burst*:
@@ -121,11 +132,99 @@ to watch it unfold. Everything is drawn in real metres, at true size and distanc
 )
 
 The camera can be turned freely with the mouse, or set with the buttons: *Aerial*, *Side*,
-*From a boat* and *Far away*. Dragging things is only possible in the technical view.
+*From a boat*, *Far away* and *Underwater*. Camera changes glide rather than jump. Dragging things
+is only possible in the technical view.
 
 #caution[The realistic view is a picture, not a measurement. The cloud's puffs, colours and
 lighting are artistic. Its sizes and timings follow the models, but use the technical view and the
 results panel for numbers.]
+
+== The underwater view
+
+Turn the camera down below the sea surface, or press *Underwater*, and the realistic view shows
+the scene as a diver would see it. The *Underwater* button puts you next to the first animal or
+diver in the list, at its true depth, looking back toward the burst. A label at the top shows how
+deep the camera is.
+
+#table(
+  columns: (auto, 1fr), stroke: 0.4pt + luma(180), inset: 6pt,
+  table.header([*What you see*], [*Where it comes from*]),
+  [Shock front], [A thin, glassy shell growing from the burst at the speed of sound in water
+    (about 1.5 km per second). It is cut off at the surface and the sea floor. Where it reaches the
+    surface you see a fast bright ring spreading overhead.],
+  [Gas bubble], [For underwater bursts only: a silvery ball of hot gas and steam. Its largest size
+    comes from Cole's (1948) bubble formula for TNT, and its growth from Rayleigh's bubble equation
+    (see the note below). In shallow water, as at BAKER, it reaches the surface within a fraction of a
+    second and bursts out into the air.],
+  [Waves and blast from below], [Bright bands passing across the surface overhead, at the same
+    distances as the wave rings and the air-blast ring seen from above.],
+  [The bright window overhead], [Water bends light, so the whole sky is squeezed into a circle
+    overhead about 97 degrees wide (Snell's law). Outside it the surface acts like a mirror and looks
+    dark. The light shafts lean at the angle the sunlight is bent to.],
+  [Animals, divers, boat hulls], [The same 3D models at their true positions. Under water boats are
+    drawn at their true size, so you see the hull from below.],
+)
+
+#caution[Several things here are decoration and are listed as such in the view's notes. Real sea
+water is much murkier: you could see a few tens of metres, not the few hundred drawn here. The
+colour of the water, the pattern of the caustics (the dancing lines of light), the floating
+particles and the brightness of the shock front are also made up. The bubble model is a rough
+estimate: Glasstone gives no bubble size, so we use the TNT formula with the same "TNT equivalent"
+as the shock model. It also ignores the bubble rising and the later pulses (a deep bubble shrinks
+and grows again two or three times). The shock bouncing off the sea floor is not shown.]
+
+== The free camera
+
+Both views have a *Free* camera button (or press `F`). It works like the spectator camera in a
+video game:
+
+#table(
+  columns: (auto, 1fr), stroke: 0.4pt + luma(180), inset: 6pt,
+  table.header([*Key*], [*What it does*]),
+  [click the view], [grab the mouse, so moving it looks around],
+  [`W` `A` `S` `D`], [fly forwards, left, backwards, right],
+  [`E` / `Q` (or Space / `C`)], [fly up / down],
+  [`Shift` / `Alt`], [faster / slower while held; the mouse wheel sets the normal speed],
+  [`Esc`], [let go of the mouse],
+  [`F` again, or a camera button], [leave the free camera; the normal camera carries on from where you are],
+)
+
+The speed grows with height, so you can skim over the waves near the surface and still cross a
+mushroom cloud kilometres up in a few seconds. In the realistic view you can fly straight down into
+the water to switch to the underwater look.
+
+== Saving and sharing
+
+- *Save as…* (`⌘/Ctrl S`) keeps the whole setup (burst, sea, everything in it, the view and the
+  moment on the timeline) under a name, in this browser only.
+- *Copy share link* puts the whole setup inside a link. Anyone who has nukesim running opens the
+  link and sees exactly the same scenario. Nothing is uploaded: the setup is written into the link
+  itself.
+- *Export to file* saves the same thing as a small `.json` file you can e-mail or keep; *Open file*
+  loads it again.
+- Removing something from the sea can be undone (the message that appears has an *Undo* button, or
+  press `⌘/Ctrl Z`).
+
+== Keyboard shortcuts
+
+#table(
+  columns: (auto, 1fr), stroke: 0.4pt + luma(180), inset: 6pt,
+  table.header([*Key*], [*What it does*]),
+  [Space], [play / pause the timeline],
+  [← / →, Home / End], [step through time; jump to the detonation / the end],
+  [`1`–`6`], [camera presets (in the order of the camera buttons)],
+  [`F`], [free camera on / off],
+  [`T` / `R`], [technical / realistic view],
+  [`X`], [basic / expert detail],
+  [`[` / `]`], [hide / show the left / right panel],
+  [Delete], [remove the selected thing],
+  [`P`], [save a picture of the view],
+  [`?`], [list of shortcuts],
+)
+
+#keyidea[*Units* only change what is *shown*. The physics always works in metric. Some result
+texts come straight from the models and keep the units of their sources (often both, such as psi
+and kPa).]
 
 == Things to try
 
@@ -136,6 +235,8 @@ results panel for numbers.]
   is exposed to everything.
 + *The same 20 kt, 27 m underwater in 60 m of water* (like BAKER, 1946). Add a dolphin and drag
   it from near the surface to deeper water. Watch how the surface cutoff protects it near the top.
++ *Pick BAKER, switch to Realistic and press Underwater*, then drag the timeline to the first
+  second. Watch the bubble burst out through the surface and the shock front sweep past the fish.
 + *1 Mt on the surface, deep ocean.* Note the coupling (about 2%), the crater and the waves, then
   move a fish tens of kilometres downwind and look at its fallout dose over weeks.
 + Use the *danger zones* overlay to see, at a glance, where each kind of animal would be hurt.

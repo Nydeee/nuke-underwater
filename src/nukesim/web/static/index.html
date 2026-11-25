@@ -15,9 +15,9 @@
 <body class="basic">
   <header id="topbar">
     <div class="brand"><span class="logo">◎</span> nukesim <span class="tag">Nuclear burst on water simulator</span></div>
-    <label class="preset">Scenario
+    <label class="preset" title="Load a ready-made example">
       <select id="presetSel">
-        <option value="">Choose a scenario…</option>
+        <option value="">Example scenarios…</option>
         <option value="hiroshima">Hiroshima-sized air burst over the sea (15 kt, 580 m)</option>
         <option value="baker">Crossroads BAKER, 1946 (23 kt, 27 m under a lagoon)</option>
         <option value="surface1mt">1 Mt burst on the sea surface</option>
@@ -25,61 +25,66 @@
         <option value="deep">Deep underwater 100 kt (300 m deep)</option>
       </select>
     </label>
+    <span class="spacer"></span>
+    <button id="saveBtn" class="tb" title="Save, open and share scenarios">💾 <span class="tbl">Scenario</span> ▾</button>
+    <button id="exportBtn" class="tb" title="Download a picture or the results">⤓ <span class="tbl">Export</span> ▾</button>
+    <span class="divider"></span>
     <div class="seg" id="viewSeg" aria-label="View">
-      <button data-view="technical" class="on" title="Scientific view: cut-away, overlays and dragging">Technical</button>
-      <button data-view="realistic" title="Realistic view: ocean, sky, fireball and cloud, driven by the timeline">Realistic</button>
+      <button data-view="technical" class="on" title="Scientific view: cut-away, overlays and dragging (T)">Technical</button>
+      <button data-view="realistic" title="Realistic view: ocean, sky, fireball and cloud, driven by the timeline (R)">Realistic</button>
     </div>
     <div class="seg" id="detailSeg" aria-label="Detail level">
-      <button data-detail="basic" class="on" title="Key numbers and plain wording">Basic</button>
-      <button data-detail="expert" title="Every criterion, source, uncertainty setting and caveat">Expert</button>
+      <button data-detail="basic" class="on" title="Key numbers and plain wording (X switches)">Basic</button>
+      <button data-detail="expert" title="Every criterion, source, uncertainty setting and caveat (X switches)">Expert</button>
     </div>
-    <button id="helpBtn" class="ghost" title="How to use this">? Help</button>
+    <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset">⚙</button>
+    <button id="helpBtn" class="tb" title="Help, tour and keyboard shortcuts">? <span class="tbl">Help</span> ▾</button>
   </header>
 
   <aside id="controls">
     <details open>
       <summary>💥 Burst</summary>
-      <label>Yield
+      <label title="Energy released by the weapon">Yield
         <span class="row"><input id="yield" type="number" min="0.001" step="any" value="20">
-          <select id="yieldUnit"><option value="1">kt</option><option value="1000">Mt</option></select></span>
+          <select id="yieldUnit" title="Kilotons or megatons of TNT"><option value="1">kt</option><option value="1000">Mt</option></select></span>
         <span class="help">Energy released, in thousands (kt) or millions (Mt) of tons of TNT.</span>
       </label>
-      <label><span data-basic="Where" data-expert="Height of burst (HOB) / depth of burst (DOB)">Where</span>
+      <label title="Height above, or depth below, the sea surface"><span data-basic="Where" data-expert="Height of burst (HOB) / depth of burst (DOB)">Where</span>
         <span class="row"><select id="side"><option value="above">above the water</option><option value="below">below the water</option></select>
-          <input id="burstDist" type="number" min="0" step="any" value="500"><span class="unit">m</span></span>
+          <input id="burstDist" type="number" min="0" step="any" value="500" data-q="m" title="How far above or below the surface"><span class="unit">m</span></span>
       </label>
-      <label>Wind <span class="row"><input id="wind" type="number" min="1" max="100" value="15"><span class="unit">mph</span></span>
+      <label title="Wind speed at the surface; fallout drifts downwind">Wind <span class="row"><input id="wind" type="number" min="1" max="200" value="24" data-q="wind"><span class="unit">km/h</span></span>
         <span class="help">Carries the fallout downwind (+x direction).</span></label>
-      <label class="expert">Fission share of yield <span class="row"><input id="fission" type="number" min="1" max="100" value="100"><span class="unit">%</span></span>
+      <label class="expert" title="Share of the energy from fission (the rest from fusion)">Fission share of yield <span class="row"><input id="fission" type="number" min="1" max="100" value="100"><span class="unit">%</span></span>
         <span class="help">Fallout scales with fission yield (Glasstone §9.94).</span></label>
     </details>
 
     <details open>
       <summary>🌊 Sea</summary>
-      <label class="check"><input id="deepOcean" type="checkbox" checked> Deep open ocean</label>
-      <label>Water depth <span class="row"><input id="waterDepth" type="number" min="1" value="200" disabled><span class="unit">m</span></span></label>
+      <label class="check" title="Untick to set a water depth (the sea floor appears)"><input id="deepOcean" type="checkbox" checked> Deep open ocean</label>
+      <label title="Depth from the surface to the sea floor">Water depth <span class="row"><input id="waterDepth" type="number" min="1" value="200" disabled data-q="m"><span class="unit">m</span></span></label>
     </details>
 
     <details open>
       <summary>🐟 Things in the sea</summary>
-      <div class="buttons">
-        <button data-add="fish">🐟 Fish</button>
-        <button data-add="whale">🐋 Whale</button>
-        <button data-add="dolphin">🐬 Dolphin</button>
-        <button data-add="turtle">🐢 Turtle</button>
-        <button data-add="diver">🤿 Diver</button>
-        <button data-add="boat">🚤 Boat</button>
+      <div class="buttons" id="addButtons">
+        <button data-add="fish" title="Add a fish">🐟 Fish</button>
+        <button data-add="whale" title="Add a whale">🐋 Whale</button>
+        <button data-add="dolphin" title="Add a dolphin">🐬 Dolphin</button>
+        <button data-add="turtle" title="Add a sea turtle">🐢 Turtle</button>
+        <button data-add="diver" title="Add a scuba diver">🤿 Diver</button>
+        <button data-add="boat" title="Add a person on a small boat">🚤 Boat</button>
       </div>
-      <p class="help">In the technical view, drag them along the cut-away to change distance and depth.</p>
+      <p class="help">In the technical view, drag them along the cut-away to move them. Select one and press Delete to remove it.</p>
       <ul id="receiverList"></ul>
     </details>
 
     <details id="techViewBox" open>
       <summary>🔬 Technical view</summary>
-      <label>Distance shown <span class="row"><input id="maxRange" type="number" min="0.1" step="any" value="3"><span class="unit">km</span></span></label>
-      <label>Depth shown <span class="row"><input id="maxDepth" type="number" min="1" value="100"><span class="unit">m</span></span></label>
-      <label class="expert">Water view height vs distance <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>
-      <label>Colour the cut-away by
+      <label title="How far from ground zero the cut-away reaches">Distance shown <span class="row"><input id="maxRange" type="number" min="0.1" step="any" value="3" data-q="km"><span class="unit">km</span></span></label>
+      <label title="How deep the cut-away reaches">Depth shown <span class="row"><input id="maxDepth" type="number" min="1" value="100" data-q="m"><span class="unit">m</span></span></label>
+      <label class="expert" title="Depths are tiny next to distances, so the water part is stretched">Water view height vs distance <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>
+      <label title="Colour the cut-away by a quantity">Colour the cut-away by
         <select id="overlay">
           <option value="none">nothing</option>
           <option value="pressure">peak water pressure</option>
@@ -98,21 +103,21 @@
   <main>
     <div id="scene"></div>
     <div id="burstInfo"></div>
-    <div id="camBar" hidden>
-      <span>Camera:</span>
-      <button data-cam="aerial">Aerial</button>
-      <button data-cam="side">Side</button>
-      <button data-cam="boat">From a boat</button>
-      <button data-cam="far">Far away</button>
-    </div>
-    <div id="status">Loading…</div>
+    <div id="camBar"></div>
+    <div id="uwHud" hidden><span class="uwIcon">≋</span> Underwater · <b>0 m</b> deep</div>
+    <div id="flyHint" hidden></div>
+    <div id="status"><span class="spin"></span><span class="txt">Loading…</span></div>
+    <button class="edgeTab left" id="toggleLeft" title="Hide / show the setup panel ([)">‹</button>
+    <button class="edgeTab right" id="toggleRight" title="Hide / show the results panel (])">›</button>
+    <div class="splitter left" data-side="left" title="Drag to resize"></div>
+    <div class="splitter right" data-side="right" title="Drag to resize"></div>
   </main>
 
   <aside id="results">
     <div class="resultsHead">
       <h2>Results</h2>
-      <label class="check small"><input id="uncertainty" type="checkbox"> Show uncertainty</label>
-      <label class="small expert">runs <input id="nSamples" type="number" min="20" max="2000" value="200" style="width:64px"></label>
+      <label class="check small" title="Run the models many times with their uncertain inputs varied"><input id="uncertainty" type="checkbox"> Show uncertainty</label>
+      <label class="small expert" title="Number of Monte Carlo runs">runs <input id="nSamples" type="number" min="20" max="2000" value="200" style="width:64px"></label>
     </div>
     <p class="help" id="resultsHint">Click something in the sea (or in the list) to see what happens to it.</p>
     <div id="report"></div>
@@ -132,23 +137,80 @@
     </details>
   </aside>
 
-  <div id="helpModal" hidden>
+  <div id="helpModal" class="modal" hidden>
     <div class="card">
-      <h2>How to use nukesim</h2>
+      <h2>Welcome to nukesim</h2>
+      <p>See what a nuclear burst over (or under) the sea does to the water and to the fish, whales,
+        divers and boats in it, with every number taken from published sources.</p>
       <ol>
-        <li><b>Pick a scenario</b> at the top, or set the burst yourself on the left (yield, above or below the water, how far).</li>
-        <li><b>Add things to the sea</b>: fish, whales, dolphins, turtles, divers and boats. In the technical view, drag them to move them.</li>
-        <li><b>Click one</b> to see what happens to it: blast, hearing, burns, radiation and fallout, each with the numbers behind it.</li>
+        <li><b>Pick an example</b> at the top, or set the burst yourself on the left.</li>
+        <li><b>Add things to the sea</b> and <b>click one</b> to see what happens to it.</li>
         <li><b>Use the timeline</b> at the bottom to play the event from the flash to weeks later.</li>
-        <li>Switch to <b>Realistic</b> to watch it as it would look: ocean, sky, fireball, mushroom cloud and waves.</li>
-        <li><b>Basic / Expert</b> switches how much detail you see. Expert shows every criterion, source and caveat.</li>
+        <li>Switch to <b>Realistic</b> to watch it as it would look. Press <kbd>F</kbd> to fly around freely.</li>
+        <li><b>Basic / Expert</b> switches how much detail you see.</li>
       </ol>
-      <p class="help">All numbers come from published sources (Glasstone &amp; Dolan, U.S. Navy, IAEA, ICRP and others) and carry their limits.
-        This is an educational tool, not a substitute for detailed engineering models.</p>
-      <button id="helpClose" class="primary">Got it</button>
+      <p class="help">An educational tool, not a substitute for detailed engineering models. All numbers carry the limits of their sources.</p>
+      <div class="cardButtons"><button id="helpClose" class="ghost">Skip</button><span style="flex:1"></span><button id="tourStart" class="primary">Take the 1-minute tour</button></div>
     </div>
   </div>
 
+  <div id="shortcutsModal" class="modal" hidden>
+    <div class="card">
+      <h2>Keyboard shortcuts</h2>
+      <div class="kbdGrid">
+        <h4>Timeline</h4>
+        <span><kbd>Space</kbd></span><span>play / pause</span>
+        <span><kbd>←</kbd> <kbd>→</kbd></span><span>step back / forward in time</span>
+        <span><kbd>Home</kbd> <kbd>End</kbd></span><span>detonation / the end</span>
+        <h4>Camera</h4>
+        <span><kbd>1</kbd> – <kbd>6</kbd></span><span>camera presets</span>
+        <span><kbd>F</kbd></span><span>free camera on / off</span>
+        <span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></span><span>fly (free camera)</span>
+        <span><kbd>E</kbd> <kbd>Q</kbd></span><span>up / down (also Space / C)</span>
+        <span><kbd>Shift</kbd> <kbd>Alt</kbd></span><span>faster / slower; the mouse wheel sets the speed</span>
+        <span><kbd>Esc</kbd></span><span>let go of the mouse</span>
+        <h4>Interface</h4>
+        <span><kbd>T</kbd> <kbd>R</kbd></span><span>technical / realistic view</span>
+        <span><kbd>X</kbd></span><span>basic / expert detail</span>
+        <span><kbd>[</kbd> <kbd>]</kbd></span><span>hide / show the side panels</span>
+        <span><kbd>Delete</kbd></span><span>remove the selected thing</span>
+        <span><kbd>⌘/Ctrl</kbd> <kbd>Z</kbd></span><span>undo removing it</span>
+        <span><kbd>⌘/Ctrl</kbd> <kbd>S</kbd></span><span>save the scenario</span>
+        <span><kbd>P</kbd></span><span>save a picture of the scene</span>
+        <span><kbd>?</kbd></span><span>this list</span>
+      </div>
+      <div class="cardButtons"><span style="flex:1"></span><button class="primary" data-close="shortcutsModal">Close</button></div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal" hidden>
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="setRow"><b>Units</b>
+        <div class="seg inline" id="unitSeg">
+          <button data-units="metric" class="on">Metric (m, km)</button>
+          <button data-units="imperial">Imperial (ft, mi)</button>
+        </div>
+        <span class="help">Changes the setup boxes, labels and charts. Results written by the models keep their original units (often both).</span>
+      </div>
+      <div class="setRow"><b>Graphics quality</b>
+        <div class="seg inline" id="qualitySeg">
+          <button data-quality="high" class="on">High</button>
+          <button data-quality="balanced">Balanced</button>
+          <button data-quality="low">Low</button>
+        </div>
+        <span class="help">Lower this if the 3D view is slow on your computer.</span>
+      </div>
+      <label class="check"><input id="autoPlay" type="checkbox" checked> Play the timeline when switching to the realistic view</label>
+      <label class="check"><input id="showPins" type="checkbox" checked> Show marker pins in the realistic view</label>
+      <div class="cardButtons">
+        <button id="resetPrefs" class="ghost" title="Forget layout, units and preferences (saved scenarios are kept)">Reset layout &amp; preferences</button>
+        <span style="flex:1"></span><button class="primary" data-close="settingsModal">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
   <script type="module" src="app.js"></script>
 </body>
 </html>
