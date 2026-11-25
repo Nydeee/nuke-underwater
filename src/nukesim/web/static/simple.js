@@ -139,85 +139,113 @@ export function initSimple(ctx) {
     step();
   }
 
+  // ---- the film is a list of "beats": each has a moment in the event (sim time), a caption about it and
+  //      a camera shot that shows exactly that. Playback glides from one beat to the next in a few
+  //      seconds of real time (slow motion early on, fast later), so every caption gets time on screen.
+  const nameOf = (r) => `the ${r.label.replace(/ \d+$/, "").toLowerCase()}`;
+  const listNames = (rs) => rs.length === 1 ? nameOf(rs[0]) : `${rs.slice(0, -1).map(nameOf).join(", ")} and ${nameOf(rs[rs.length - 1])}`;
+
   function startFilm(data) {
     if (!data) { show("start"); return; }
     const sc = ctx.scenario(), bz = sc.burst.z_m, y = sc.burst.yield_kt;
     const fb = data.fireball, fbEnd = fb ? fb.end_s : 1;
-    const recs = data.receivers || [];
-    const byLabel = Object.fromEntries(ctx.state.receivers.map((r) => [r.id, r]));
-    const boat = recs.find((r) => ["person", "ship"].includes(byLabel[r.id]?.kind) && r.pulse);
-    const tBoat = boat ? boat.pulse.arrival_s : null;
-    const firstHit = Math.min(...recs.filter((r) => r.pulse).map((r) => r.pulse.arrival_s), 30);
-    const tKey = Math.min(Math.max((tBoat ?? firstHit) + 4, fbEnd), fbEnd + 20);
-    // camera shots (switch when the film time passes t)
-    const shots = [];
-    if (bz < 0) {
-      shots.push({ t: 0, cam: ctx.state.receivers.some((r) => r.z_m < 0) ? "under" : "side" }, { t: 1.5, cam: "side" });
-      if (tBoat != null) shots.push({ t: Math.max(tBoat - 0.6, 2), cam: "boat" }, { t: tBoat + 6, cam: "far" });
-      else shots.push({ t: 25, cam: "far" });
+    const recById = Object.fromEntries(ctx.state.receivers.map((r) => [r.id, r]));
+    const tl = (data.receivers || []).filter((x) => recById[x.id] && !x.error);
+    const beats = [];
+    const beat = (t, cam, text, dur = 3.2) => beats.push({ t, cam, text, dur });
+
+    // 1. the burst itself
+    if (bz >= 0) {
+      beat(1e-4, { name: "close" }, "Detonation. In a millionth of a second the fireball is as hot as the centre of the Sun.", 2.6);
+      if (fb) {
+        beat(Math.max(fb.t_s?.[0] ?? 1e-3, 1.5e-3), { name: "close" }, "A flash brighter than the Sun: about a third of the energy leaves as heat and light.", 3);
+        const D = 2 * fb.max_radius_m;
+        beat(Math.min(Math.max(fbEnd * 0.15, 0.05), 2), { name: "close" },
+          `The fireball grows to ${fmtKm(D)} across: as wide as ${Math.max(1, Math.round(D / 105))} football pitches end to end.`, 3.4);
+      }
     } else {
-      shots.push({ t: 0, cam: "close" }, { t: Math.max(fbEnd * 0.6, 0.8), cam: "side" });
-      if (tBoat != null && tBoat > 0.3) shots.push({ t: Math.max(tBoat - 0.8, fbEnd * 0.3), cam: "boat" }, { t: tBoat + 5, cam: "far" });
-      else shots.push({ t: Math.max(fbEnd, 6), cam: "far" });
-      shots.push({ t: 200, cam: "aerial" });
+      const firstWet = tl.filter((x) => recById[x.id].z_m < 0 && x.pulse).sort((a, b) => a.pulse.arrival_s - b.pulse.arrival_s)[0];
+      beat(1e-4, firstWet ? { name: "focus", id: firstWet.id } : { name: "side" }, "Detonation under the sea. A ball of hot gas forms and a shock wave races out through the water.", 2.8);
+      if (firstWet) beat(firstWet.pulse.arrival_s * 0.7, { name: "focus", id: firstWet.id },
+        `The shock travels at about 1,500 m/s, more than four times faster than sound in air. Here it comes: ${nameOf(recById[firstWet.id])}, ${fmtKm(Math.hypot(recById[firstWet.id].x_m, recById[firstWet.id].y_m || 0))} away.`, 3.6);
+      beat(Math.max((firstWet?.pulse.arrival_s ?? 0.2) * 2, 0.8), { name: "side" }, "Above, a dome of spray bursts out of the sea, then a huge column of water shoots up.", 4);
     }
-    shots.sort((a, b) => a.t - b.t);
-    // captions
-    const cap = [];
-    cap.push({ t: 1e-4, text: "Detonation. In a millionth of a second the fireball is as hot as the centre of the Sun." });
-    if (fb && bz >= 0) {
-      cap.push({ t: Math.max(fb.t_s[0], 2e-3), text: "A flash brighter than the Sun: about a third of the energy leaves as heat and light." });
-      const D = 2 * fb.max_radius_m;
-      cap.push({ t: Math.min(fbEnd * 0.4, 3), text: `The fireball grows to ${fmtKm(D)} across: as wide as ${Math.max(1, Math.round(D / 105))} football pitches end to end.` });
+
+    // 2. the blast (or the pressure wave in the water) reaching each thing, grouped when they come close together
+    const shown = new Set(beats.filter((b) => b.cam.id).map((b) => b.cam.id));   // already had its own beat
+    const hits = tl.filter((x) => x.pulse && !shown.has(x.id)).sort((a, b) => a.pulse.arrival_s - b.pulse.arrival_s);
+    const groups = [];
+    for (const h of hits) {
+      const g = groups[groups.length - 1];
+      if (g && h.pulse.arrival_s < g.t * 1.6) g.items.push(h); else groups.push({ t: h.pulse.arrival_s, items: [h] });
     }
-    if (bz < 0) {
-      cap.push({ t: 2e-3, text: "Underwater, the shock races through the sea at about 1,500 m/s, more than four times faster than sound in air." });
-      cap.push({ t: 3, text: "A huge column of water and spray shoots up out of the sea." });
+    const already = new Set(beats.filter((b) => b.cam.id).map((b) => b.cam.id));
+    for (const g of groups.slice(0, 5)) {
+      const items = g.items.map((x) => recById[x.id]);
+      // show a boat if there is one (the blast in the air is the dramatic part), otherwise the first animal
+      const star = items.find((r) => (r.kind === "person" || r.kind === "ship") && !already.has(r.id)) || items.find((r) => !already.has(r.id)) || items[0];
+      already.add(star.id);
+      const inAir = g.items.find((x) => x.id === star.id).pulse.medium === "air";
+      const what = inAir ? "The blast wave" : bz >= 0 ? "The pressure wave, pushed down into the sea," : "The shock wave";
+      beat(g.t * 0.72, { name: "focus", id: star.id },
+        `${fmtT(g.t)}: ${what} reaches ${listNames(items)} (${fmtKm(Math.hypot(star.x_m, star.y_m || 0))} away).`, 3.6);
     }
-    for (const r of recs) {
-      const rr = byLabel[r.id];
-      if (!rr || !r.pulse) continue;
-      cap.push({ t: r.pulse.arrival_s, text: `${fmtT(r.pulse.arrival_s)}: the ${r.pulse.medium === "air" ? "blast wave" : "pressure wave"} reaches the ${rr.label.replace(/ \d+$/, "").toLowerCase()} ${fmtKm(Math.hypot(rr.x_m, rr.y_m || 0))} away.` });
-    }
+
+    // 3. the cloud (or column)
     if (bz >= 0) {
       const top = cloudTopM(y);
-      cap.push({ t: 60, text: "The mushroom cloud climbs, sucking up air, spray and debris." });
-      cap.push({ t: 300, text: `The cloud stops rising about ${fmtKm(top)} up: ${(top / 8849).toFixed(1)} times as high as Mount Everest.` });
+      beat(Math.max(40, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "side" }, "The fireball rises and cools; the mushroom cloud climbs, sucking up air, spray and debris.", 4.5);
+      beat(270, { name: "far" }, `The cloud stops rising about ${fmtKm(top)} up: ${(top / 8849).toFixed(1)} times as high as Mount Everest.`, 5);
+    } else {
+      beat(Math.max(60, (beats[beats.length - 1]?.t ?? 0) * 1.5), { name: "far" }, "The column falls back and a ring of mist, the base surge, rolls out across the sea.", 4.5);
     }
-    if (data.waves && boat?.waves && boat.waves.height_high_m > 0.5) cap.push({ t: boat.waves.max_wave_arrival_s, text: `Waves up to ${Math.round(boat.waves.height_high_m)} m high reach the boats.` });
-    cap.sort((a, b) => a.t - b.t);
-    film = { simT: 1e-4, lastSet: null, shots, shotIdx: -1, cap, capIdx: -1, fbEnd, tKey, camLocked: false, end: bz >= 0 ? 600 : 300 };
+
+    // 4. waves reaching a boat (if they are big enough to matter)
+    const boatTl = tl.find((x) => ["person", "ship"].includes(recById[x.id].kind) && x.waves && x.waves.height_high_m > 0.5);
+    if (boatTl) {
+      const tw = boatTl.waves.max_wave_arrival_s;
+      beat(tw * 0.8, { name: "focus", id: boatTl.id, low: true },
+        `${fmtT(tw)}: waves up to ${Math.round(boatTl.waves.height_high_m)} m high reach ${nameOf(recById[boatTl.id])}.`, 4);
+    }
+
+    beats.sort((a, b) => a.t - b.t);
+    for (let k = 1; k < beats.length; k++) if (beats[k].t <= beats[k - 1].t) beats[k].t = beats[k - 1].t * 1.05;   // strictly later
+    const end = Math.max(bz >= 0 ? 600 : 300, beats[beats.length - 1].t * 1.3);
+    film = { simT: beats[0].t, lastSet: null, beats, k: -1, kStart: 0, end, camLocked: false };
     show("film");
+    ctx.drift(true);
+    goBeat(0);
     renderResults();
   }
 
-  function rate(t) { return t < film.fbEnd ? null : t < film.tKey ? 1 : t < 120 ? 6 : 30; }
+  function goBeat(k) {
+    film.k = k; film.kStart = performance.now();
+    const b = film.beats[k];
+    if (!film.camLocked) { ctx.setShot(b.cam, k === 0); ctx.drift(b.cam.name !== "focus"); }   // slow turn on wide shots only
+    // the caption comes in as the camera arrives at its new shot (the move takes about a second)
+    const box = q(".spCaption");
+    clearTimeout(film.capTimer);
+    box.classList.remove("in"); box.textContent = "";
+    film.capTimer = setTimeout(() => { void box.offsetWidth; box.textContent = b.text; box.classList.add("in"); }, k === 0 || film.camLocked ? 0 : 700);
+  }
 
-  function update(dt) {
+  function update() {
     if (showing !== "film" || !film) return;
     // the user took over the timeline (dragged it or pressed play): stop directing
-    if (film.lastSet != null && Math.abs(ctx.timeline.getTime() - film.lastSet) > 1e-9 * Math.max(1, film.lastSet)) { finish(); return; }
-    const r = rate(film.simT);
-    film.simT = r == null ? Math.min(film.simT * Math.pow(10, dt * 0.8), Math.max(film.fbEnd, film.simT + 1e-9)) : film.simT + dt * r;
-    if (film.simT >= film.end) { film.simT = film.end; ctx.timeline.setTime(film.simT); finish(); return; }
+    if (film.lastSet != null && Math.abs(ctx.timeline.getTime() - film.lastSet) > 1e-6 * Math.max(1, film.lastSet)) { finish(); return; }
+    const b = film.beats[film.k], next = film.beats[film.k + 1];
+    const tNext = next ? next.t : film.end;
+    const f = Math.min((performance.now() - film.kStart) / 1000 / b.dur, 1);
+    film.simT = b.t * Math.pow(tNext / b.t, f);             // glide in log time: slow motion early, fast later
     ctx.timeline.setTime(film.simT); film.lastSet = ctx.timeline.getTime();
-    // camera
-    let si = -1;
-    film.shots.forEach((s, i) => { if (film.simT >= s.t) si = i; });
-    if (si !== film.shotIdx && !film.camLocked) { film.shotIdx = si; ctx.setCam(film.shots[si].cam); }
-    // caption
-    let ci = -1;
-    film.cap.forEach((c, i) => { if (film.simT >= c.t) ci = i; });
-    if (ci !== film.capIdx) {
-      film.capIdx = ci;
-      const box = q(".spCaption");
-      box.classList.remove("in"); void box.offsetWidth;
-      box.textContent = ci >= 0 ? film.cap[ci].text : ""; box.classList.add("in");
+    if (f >= 1) {
+      if (next) goBeat(film.k + 1);
+      else { finish(); return; }
     }
     if (Math.random() < 0.1) renderResults();
   }
 
-  function finish() { show("results"); renderResults(); }
+  function finish() { ctx.drift(false); show("results"); renderResults(); }
 
   // ---------------------------------------------------------------- results in plain words
   function renderResults() {
@@ -260,7 +288,7 @@ export function initSimple(ctx) {
   q(".spReplay").addEventListener("click", replay);
   q(".spReplay2").addEventListener("click", replay);
   q(".spSkip").addEventListener("click", () => { ctx.timeline.setTime(film?.end ?? 600); finish(); });
-  const again = () => { film = null; ctx.timeline.pause(); show("start"); };
+  const again = () => { film = null; ctx.drift(false); ctx.timeline.pause(); show("start"); };
   q(".spNew").addEventListener("click", again);
   q(".spNew2").addEventListener("click", again);
   q(".spResClose").addEventListener("click", () => { q(".spResults").hidden = true; });
@@ -269,7 +297,7 @@ export function initSimple(ctx) {
   return {
     update,
     show,
-    lockCamera() { if (film) film.camLocked = true; },
+    lockCamera() { if (film) { film.camLocked = true; ctx.drift(false); } },
     refresh: renderResults,
     get state() { return showing; },
     get choice() { return choice; },

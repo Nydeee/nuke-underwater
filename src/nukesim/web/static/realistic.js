@@ -291,14 +291,34 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
     }
     return { top: cloudTopM(y), rad: cloudRadiusM(y) };
   }
-  function setPreset(name, instant = false) {
+  function setPreset(name, instant = false, opts = {}) {
     const from = camera.position.clone();
     const sc = scenario(), { top } = sizes(), bz = Math.max(sc.burst.z_m, 0);
     const boat = state.receivers.find((r) => r.kind === "person" || r.kind === "ship");
     const look = new THREE.Vector3(0, Math.max(top * 0.45, bz), 0);
-    if (name === "under") {
+    const focus = name === "focus" && state.receivers.find((q) => q.id === opts.id);
+    if (focus) {
+      // close to one animal or boat, on the far side from the burst, looking back toward it:
+      // the thing in the foreground, the burst (and whatever is coming) behind it
+      const r = focus, ship = r.kind === "ship", onTop = r.kind === "person" || ship;
+      const L = realLength(r) * (r.kind === "person" ? 6 : ship && r.ship_type === "small_craft" ? 2 : 1);
+      const rx = r.x_m, rz = r.y_m || 0, dist = Math.hypot(rx, rz) || 1;
+      const ux = rx / dist, uz = rz / dist, px = -uz, pz = ux;             // away from the burst, and sideways
+      if (onTop) {
+        const back = L * (opts.low ? 1.6 : 1.8) + 15, side = L * 0.2, up = opts.low ? Math.max(L * 0.1, 3) : L * 0.25 + 5;
+        camera.position.set(rx + ux * back + px * side, up, rz + uz * back + pz * side);
+        const hFar = opts.low ? 2 : Math.min(Math.max(bz, 40), dist * 0.25);
+        look.set(rx * 0.55, opts.low ? 1 : hFar * 0.45, rz * 0.55);
+      } else {
+        const wd = sc.env.water_depth_m, d = Math.max(4, L * 2.6);
+        let y = Math.min(r.z_m + L * 0.35, -1);
+        if (wd) y = Math.max(y, -wd + 1.5);
+        camera.position.set(rx + ux * d + px * d * 0.55, y, rz + uz * d + pz * d * 0.55);
+        look.set(rx - ux * L * 0.9, Math.min(r.z_m + L * 0.45, -0.5), rz - uz * L * 0.9);   // just past the animal, a little upward
+      }
+    } else if (name === "under") {
       // next to the first animal/diver in the sea, at its true depth, looking back toward ground zero
-      const wd = sc.env.water_depth_m, r = state.receivers.find((q) => q.kind !== "person");
+      const wd = sc.env.water_depth_m, r = state.receivers.find((q) => q.z_m < 0);
       const L = r ? realLength(r) : 2, d = Math.max(5, L * 4);
       const x = r ? r.x_m : 600, z = r ? r.y_m || 0 : 0;
       let y = r ? r.z_m : -15;

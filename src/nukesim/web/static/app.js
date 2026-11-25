@@ -741,6 +741,7 @@ const freecam = createFreecam({ dom: renderer.domElement, onChange: updateFlyHin
 function activeCam() { return mode === "realistic" ? realistic.camera : camera; }
 function activeControls() { return mode === "realistic" ? realistic.controls : controls; }
 function startFree() {
+  simple?.lockCamera();
   activeControls().enabled = false;
   (mode === "realistic" ? realistic.tween : techTween).cancel();
   const speed = mode === "realistic"
@@ -1169,7 +1170,8 @@ simple = initSimple({
   getResults: () => state.results,
   setup: simpleSetup,
   toExpert: () => setDetail("expert"),
-  setCam: (name) => { if (freecam.active) return; currentCam = name; realistic.setPreset(name); markCam(); },
+  setShot: (c, instant) => { if (freecam.active) return; currentCam = c.name; realistic.setPreset(c.name, instant, c); markCam(); },
+  drift: (on) => { realistic.controls.autoRotate = on; realistic.controls.autoRotateSpeed = 0.3; },   // slow cinematic turn
 });
 setDetail(prefs.detail);
 buildCamBar();
