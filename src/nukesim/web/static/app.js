@@ -22,7 +22,9 @@ const modelsReady = Promise.all([loadHumans(), loadAnimals()]).then(() => {
   realistic?.rebuildReceivers();
 });
 import { fmtTime } from "./timeline.js";
-import { SPECIES, speciesOf, speciesIn, GROUPS } from "./species.js";
+import { SPECIES, speciesOf, speciesIn, GROUPS, iconOf } from "./species.js";
+import { icon, fillIcons } from "./icons.js";
+fillIcons();   // the icons written into index.html as <i data-icon="…">
 import { initRealistic } from "./realistic.js";   // realistic view (see realistic.js)
 import { createFreecam, createCameraTween } from "./freecam.js";   // WASD free camera, smooth camera moves
 import { units, setSystem, readInput, writeInput, fmtLen, fmtDepth, chartUnits } from "./units.js";
@@ -318,7 +320,7 @@ function addReceiver(preset) {
   const p = speciesOf(preset);
   const id = `${preset}-${state.nextId++}`;
   const { R } = view();
-  state.receivers.push({ id, preset, kind: p.kind, label: `${p.label} ${state.nextId - 1}`, emoji: p.emoji,
+  state.receivers.push({ id, preset, kind: p.kind, label: `${p.label} ${state.nextId - 1}`, icon: p.icon,
     x_m: R * (0.2 + 0.6 * Math.random()), y_m: 0, z_m: p.z_m, mass_kg: p.mass_kg ?? null,
     swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null, ship_type: p.ship_type ?? null });
   state.selected = id;
@@ -333,7 +335,7 @@ function renderList() {
     if (r.id === state.selected) li.className = "selected";
     const color = colorOf(r);
     const where = onSurface(r) ? (r.kind === "ship" ? "on the surface" : "on deck") : r.kind === "bird" ? `${fmtDepth(r.z_m)} up` : `${fmtDepth(-r.z_m)} deep`;
-    li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${esc(r.emoji)} ${esc(r.label)}</span>
+    li.innerHTML = `<div class="top"><span><span class="dot" style="background:${color}"></span>${icon(iconOf(r))} ${esc(r.label)}</span>
       <button class="del" title="Remove (Delete)">✕</button></div>
       <div class="hint">${fmtLen(r.x_m)} out, ${where}</div>`;
     {
@@ -361,7 +363,7 @@ function renderList() {
 function changeSpecies(r, key) {
   const p = SPECIES[key];
   const oldLabel = speciesOf(r.preset)?.label;
-  Object.assign(r, { preset: key, kind: p.kind, emoji: p.emoji, mass_kg: p.mass_kg ?? null, swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null, ship_type: p.ship_type ?? null });
+  Object.assign(r, { preset: key, kind: p.kind, icon: p.icon, mass_kg: p.mass_kg ?? null, swim_bladder: p.swim_bladder ?? true, hearing_group: p.hearing_group ?? null, ship_type: p.ship_type ?? null });
   if (oldLabel && r.label.startsWith(oldLabel)) r.label = p.label + r.label.slice(oldLabel.length);
   if (p.note) toast(p.note);
   buildReceivers(); renderList(); scheduleAssess();
@@ -454,14 +456,14 @@ function renderReport() {
   const onset = (name) => rt?.effects?.find((x) => x.name === name)?.onset_s ?? null;
   const happened = (name) => !rt || (onset(name) != null && onset(name) <= t);
   const sofar = rt ? worstSoFar(r.id) : res.worst;
-  let html = `<div class="summaryCard"><div class="big">${esc(r.emoji)} ${esc(r.label)}</div>
+  let html = `<div class="summaryCard"><div class="big">${icon(iconOf(r))} ${esc(r.label)}</div>
     <div class="help">${fmtLen(r.x_m)} from ground zero, ${where}</div>
     <div style="margin-top:6px">${rt ? `At ${esc(fmtTime(t))}: ${sofar ? `<span class="level lv-${sofar}">${sofar}</span>` : `<span class="tl-pending">nothing yet</span>`}
       <span class="help inline">· in the end: <span class="level lv-${res.worst}">${res.worst}</span></span>`
       : `Worst effect: <span class="level lv-${res.worst}">${res.worst}</span>`}
     ${u ? ` · most likely: <span class="level lv-${u.most_likely}">${u.most_likely}</span>` : ""}</div>
     ${u ? `${probBar(u.level_probs)}<div class="help">chance of each worst outcome over ${u.n} runs</div>` : ""}
-    <button class="bodyBtn" id="bodyBtn" title="See where on the body each injury is">🩻 Body view</button></div>`;
+    <button class="bodyBtn" id="bodyBtn" title="See where on the body each injury is">${icon("bodyScan")} Body view</button></div>`;
   // in time order when following the timeline: an injury log
   const effects = rt ? [...res.effects].sort((a, b) => (onset(a.name) ?? 1e12) - (onset(b.name) ?? 1e12)) : res.effects;
   for (const e of effects) {
@@ -544,11 +546,11 @@ function renderBurstInfo() {
 }
 
 // ---------------------------------------------------------------- danger distances (/api/zones)
-const ZONE_RINGS = [   // which ones are drawn on the sea: [key, level, colour, label]
-  ["fish_bladder", "lethal", "#ff6b5a", "🐟 fish killed"],
-  ["whale", "severe", "#f0a23c", "🐋 whales badly hurt"],
-  ["person", "lethal", "#ffd166", "🧍 people on deck killed"],
-  ["destroyer", "severe", "#7cc7ff", "🚢 ships wrecked"],
+const ZONE_RINGS = [   // which ones are drawn on the sea: [key, level, colour, label, icon]
+  ["fish_bladder", "lethal", "#ff6b5a", "fish killed", "fish"],
+  ["whale", "severe", "#f0a23c", "whales badly hurt", "whale"],
+  ["person", "lethal", "#ffd166", "people on deck killed", "person"],
+  ["destroyer", "severe", "#7cc7ff", "ships wrecked", "ship"],
 ];
 async function loadZones() {
   state.zones = null; renderZones();
@@ -561,9 +563,9 @@ function zoneRings() {
   // only for what is actually in the sea (no "ships wrecked" ring when there are no ships)
   const kinds = new Set(state.receivers.map((r) => r.kind));
   const present = { fish_bladder: kinds.has("fish"), whale: kinds.has("mammal"), person: kinds.has("person") || kinds.has("ship"), destroyer: kinds.has("ship") };
-  return ZONE_RINGS.filter(([k]) => present[k] ?? true).map(([k, lvl, color, text]) => {
+  return ZONE_RINGS.filter(([k]) => present[k] ?? true).map(([k, lvl, color, text, ic]) => {
     const r = by[k]?.farthest_m?.[lvl];
-    return r ? { r, color, text: `${text} within ${fmtLen(r)}` } : null;
+    return r ? { r, color, icon: ic, text: `${text} within ${fmtLen(r)}` } : null;
   }).filter(Boolean);
 }
 function renderZones() {
@@ -705,10 +707,10 @@ async function loadFallout() {
   box.innerHTML = "";
   for (const gr of GROUPS) {
     const list = speciesIn(gr.key), b = document.createElement("button");
-    b.innerHTML = `${gr.emoji} ${gr.label}${list.length > 1 ? " ▾" : ""}`;
+    b.innerHTML = `${icon(gr.icon)} ${gr.label}${list.length > 1 ? " ▾" : ""}`;
     b.title = list.length > 1 ? `Add: ${list.map(([, x]) => x.label).join(", ")}` : `Add a ${gr.label.toLowerCase()}`;
     box.appendChild(b);
-    if (list.length > 1) attachMenu(b, () => list.map(([k, x]) => ({ icon: x.emoji, label: `${x.label}`, kbd: x.mass_kg ? (x.mass_kg >= 1000 ? `${x.mass_kg / 1000} t` : `${x.mass_kg} kg`) : "", action: () => addReceiver(k) })));
+    if (list.length > 1) attachMenu(b, () => list.map(([k, x]) => ({ icon: icon(x.icon), label: `${x.label}`, kbd: x.mass_kg ? (x.mass_kg >= 1000 ? `${x.mass_kg / 1000} t` : `${x.mass_kg} kg`) : "", action: () => addReceiver(k) })));
     else b.addEventListener("click", () => addReceiver(list[0][0]));
   }
 })();
@@ -756,11 +758,11 @@ let mode = "technical", detail = "basic", realistic = null, simple = null;
 const sound = createSound();
 function toggleMute() {
   sound.setMuted(!sound.muted);
-  $("muteBtn").textContent = sound.muted ? "🔇" : "🔊";
+  $("muteBtn").innerHTML = icon(sound.muted ? "soundOff" : "soundOn");
   toast(sound.muted ? "Sound off" : "Sound on");
 }
 $("muteBtn").addEventListener("click", toggleMute);
-$("muteBtn").textContent = sound.muted ? "🔇" : "🔊";
+$("muteBtn").innerHTML = icon(sound.muted ? "soundOff" : "soundOn");
 
 // Simple mode puts a whole scene together from its three choices
 function simpleSetup({ kt, z_m, items }) {
@@ -790,12 +792,12 @@ function buildCamBar() {
   const list = CAMS[mode];
   $("camBar").innerHTML = `<span class="lbl">Camera</span>` +
     list.map(([k, l], i) => `<button data-cam="${k}" title="${l} (${i + 1})">${l}</button>`).join("") +
-    `<button data-cam="free" class="free" title="Fly freely with W A S D and the mouse (F)">✈ Free <kbd>F</kbd></button>` +
-    `<button class="lookMenu" title="Point the camera at one animal, person or boat">👁 Look at ▾</button>`;
+    `<button data-cam="free" class="free" title="Fly freely with W A S D and the mouse (F)">${icon("plane")} Free <kbd>F</kbd></button>` +
+    `<button class="lookMenu" title="Point the camera at one animal, person or boat">${icon("eye")} Look at ▾</button>`;
   $("camBar").querySelectorAll("button[data-cam]").forEach((b) => b.addEventListener("click", () => { simple?.lockCamera(); setCam(b.dataset.cam); }));
   attachMenu($("camBar").querySelector(".lookMenu"), () => state.receivers.length
-    ? [...state.receivers.map((r) => ({ icon: r.emoji, label: r.label, action: () => lookAtReceiver(r.id) })),
-      ...(mode === "realistic" && prefs.schools ? ["-", { icon: "🐠", label: "School of fish (edge of the killing zone)", action: () => { stopFree(false); simple?.lockCamera(); currentCam = "school"; realistic.setPreset("school", false, { i: 2 }); markCam(); } }] : [])]
+    ? [...state.receivers.map((r) => ({ icon: icon(iconOf(r)), label: r.label, action: () => lookAtReceiver(r.id) })),
+      ...(mode === "realistic" && prefs.schools ? ["-", { icon: icon("school"), label: "School of fish (edge of the killing zone)", action: () => { stopFree(false); simple?.lockCamera(); currentCam = "school"; realistic.setPreset("school", false, { i: 2 }); markCam(); } }] : [])]
     : [{ label: "Nothing in the sea yet", disabled: true, action: () => {} }]);
   markCam();
 }
@@ -962,7 +964,7 @@ function applySaved(o) {
     const p = speciesOf(r.preset);
     if (!p) continue;
     const id = `${r.preset}-${state.nextId++}`;
-    state.receivers.push({ id, preset: r.preset, kind: p.kind, label: String(r.label || `${p.label} ${state.nextId - 1}`).slice(0, 60), emoji: p.emoji,
+    state.receivers.push({ id, preset: r.preset, kind: p.kind, label: String(r.label || `${p.label} ${state.nextId - 1}`).slice(0, 60), icon: p.icon,
       x_m: num(r.x_m, 0, 1e7, 1000), y_m: num(r.y_m, -1e7, 1e7, 0), z_m: (p.kind === "person" || p.kind === "ship") ? 2 : p.kind === "bird" ? num(r.z_m, 3, 500, p.z_m) : num(r.z_m, -11000, -0.3, p.z_m),
       mass_kg: r.mass_kg == null ? p.mass_kg ?? null : num(r.mass_kg, 0.001, 2e5, p.mass_kg ?? null),
       swim_bladder: r.swim_bladder !== false, hearing_group: ["LF", "HF", "VHF", "PW", "OW"].includes(r.hearing_group) ? r.hearing_group : p.hearing_group ?? null,
@@ -1018,12 +1020,12 @@ function startOver() {
 attachMenu($("saveBtn"), () => {
   const saved = savedList();
   return [
-    { icon: "💾", label: "Save as…", kbd: "⌘S", action: saveAs },
-    { icon: "🔗", label: "Copy share link", action: shareLink },
+    { icon: icon("save"), label: "Save as…", kbd: "⌘S", action: saveAs },
+    { icon: icon("link"), label: "Copy share link", action: shareLink },
     "-",
     { icon: "⤓", label: "Export to file (.json)", action: exportFile },
-    { icon: "📂", label: "Open file…", action: () => $("importFile").click() },
-    { icon: "↺", label: "Start over", action: startOver },
+    { icon: icon("folder"), label: "Open file…", action: () => $("importFile").click() },
+    { icon: icon("replay"), label: "Start over", action: startOver },
     "-",
     { html: saved.length ? `<div class="menuHead">Saved in this browser</div>` + saved.map((x, i) =>
         `<div class="savedRow" data-i="${i}"><button class="load" title="Open">${esc(x.name)}<small>${new Date(x.at).toLocaleString()}</small></button><button class="rm" title="Delete">✕</button></div>`).join("")
@@ -1094,18 +1096,18 @@ function toggleRecording(fromStart = false) {
 $("recStop").addEventListener("click", () => toggleRecording());
 
 attachMenu($("exportBtn"), () => [
-  { icon: "🖼", label: "Picture of the 3D view (PNG)", kbd: "P", action: screenshot },
-  { icon: "🎬", label: rec ? "Stop recording" : "Record video of the 3D view", kbd: "V", action: () => toggleRecording() },
-  { icon: "💥", label: "Record the whole event from the flash", action: () => toggleRecording(true), disabled: !!rec },
-  { icon: "▦", label: "Results table (CSV, for Excel)", action: resultsCSV, disabled: !state.receivers.length },
+  { icon: icon("image"), label: "Picture of the 3D view (PNG)", kbd: "P", action: screenshot },
+  { icon: icon("film"), label: rec ? "Stop recording" : "Record video of the 3D view", kbd: "V", action: () => toggleRecording() },
+  { icon: icon("burst"), label: "Record the whole event from the flash", action: () => toggleRecording(true), disabled: !!rec },
+  { icon: icon("table"), label: "Results table (CSV, for Excel)", action: resultsCSV, disabled: !state.receivers.length },
   { icon: "{ }", label: "Full results (JSON)", action: resultsJSON },
 ]);
 
 // ---------------------------------------------------------------- help menu, tour, settings
 attachMenu($("helpBtn"), () => [
-  { icon: "🧭", label: "Guided tour", action: startTour },
-  { icon: "⌨", label: "Keyboard shortcuts", kbd: "?", action: () => openModal("shortcutsModal") },
-  { icon: "ⓘ", label: "Quick start", action: () => openModal("helpModal") },
+  { icon: icon("compass"), label: "Guided tour", action: startTour },
+  { icon: icon("keyboard"), label: "Keyboard shortcuts", kbd: "?", action: () => openModal("shortcutsModal") },
+  { icon: icon("info"), label: "Quick start", action: () => openModal("helpModal") },
 ]);
 function startTour() {
   closeModal("helpModal"); store.set("helpSeen", 1);

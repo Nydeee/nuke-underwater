@@ -12,6 +12,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { makeModel, humanModel } from "./models.js";
 import { esc } from "./ui.js";
+import { icon } from "./icons.js";
+import { iconOf } from "./species.js";
 
 const LEVELS = ["none", "possible", "likely", "severe", "lethal"];
 const LEVEL_COLORS = { none: "#6fbf73", possible: "#e6cf5a", likely: "#f0a23c", severe: "#e2552c", lethal: "#a51818" };
@@ -146,7 +148,7 @@ export function createBodyView({ getReceiver, getResult, getTimelineEntry, getTi
       }
     }
     const key = JSON.stringify(Object.entries(parts).map(([k, v]) => [k, v.level, v.pending])) + id;
-    panel.querySelector(".bvTitle").textContent = `${r.emoji || ""} ${r.label}`;
+    panel.querySelector(".bvTitle").innerHTML = `${icon(iconOf(r))} ${esc(r.label)}`;
     panel.querySelector(".bvTime").textContent = rt ? `at ${fmt(t)}` : "final result";
     if (key === lastKey) return;
     lastKey = key;

@@ -23,6 +23,8 @@ const EVENT_COLORS = { burst: "#ffffff", thermal: "#ffb347", blast: "#e2552c", r
 
 // ---------------------------------------------------------------- small helpers
 import { callApi } from "./physics.js";
+import { icon } from "./icons.js";
+import { iconOf } from "./species.js";
 export function fmtTime(t) {
   if (!(t > 0)) return "0 s (detonation)";
   const p = (v) => +v.toPrecision(v < 10 ? 2 : 3);
@@ -72,12 +74,12 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
     </div>
     <div class="tl-ticks"></div>
     <div class="tl-row">
-      <button class="tl-play" title="Play / pause (space)">▶</button>
+      <button class="tl-play" title="Play / pause (space)">${icon("play")}</button>
       <span class="tl-time">–</span>
       <span class="tl-what"></span>
       <span class="tl-spacer"></span>
       <label class="tl-speed">speed <select>${SPEEDS.map((s, i) => `<option value="${i}" ${i === 1 ? "selected" : ""}>${s.label}</option>`).join("")}</select></label>
-      <button class="tl-end" title="Jump to the end (everything has happened)">⏭</button>
+      <button class="tl-end" title="Jump to the end (everything has happened)">${icon("skip")}</button>
     </div>`;
   main.appendChild(bar);
   const nowBox = document.createElement("div");
@@ -148,9 +150,9 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
   playBtn.addEventListener("click", () => {
     playing = !playing;
     if (playing && t >= tEnd) t = 0;
-    playBtn.textContent = playing ? "❚❚" : "▶";
+    playBtn.innerHTML = icon(playing ? "pause" : "play");
   });
-  q(".tl-end").addEventListener("click", () => { handT(tEnd); playing = false; playBtn.textContent = "▶"; });
+  q(".tl-end").addEventListener("click", () => { handT(tEnd); playing = false; playBtn.innerHTML = icon("play"); });
   window.addEventListener("keydown", (ev) => {
     if (ev.code !== "Space" || document.body.classList.contains("flying") || document.body.classList.contains("spFilm") || document.querySelector(".modal:not([hidden]), .tourCard")
       || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(document.activeElement?.tagName)) return;
@@ -252,7 +254,7 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
       const sp = SPEEDS[+speedSel.value];
       if (sp.real) setT(t + dt * sp.real);
       else setT(tOf(uOf(Math.max(t, T0)) + dt / (sp.log * Math.log10(tEnd / T0))));
-      if (t >= tEnd) { playing = false; playBtn.textContent = "▶"; }
+      if (t >= tEnd) { playing = false; playBtn.innerHTML = icon("play"); }
     }
     const u = uOf(t);
     fill.style.width = `${u * 100}%`; thumb.style.left = `${u * 100}%`;
@@ -368,7 +370,7 @@ export function initTimeline({ THREE, scene, renderer, staticGroup, receiverGrou
     if (lines.length) html += `<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
     const r = rt && state.receivers.find((x) => x.id === rt.id);
     if (r) {
-      html += `<div class="tl-rec"><b>${r.emoji || ""} ${esc(r.label)}</b>`;
+      html += `<div class="tl-rec"><b>${icon(iconOf(r))} ${esc(r.label)}</b>`;
       if (rt.error) html += `<div class="tl-err">${esc(rt.error)}</div>`;
       const p = rt.pulse;
       if (p) {

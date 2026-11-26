@@ -23,6 +23,8 @@ import { setBase, pose } from "./reactions.js";
 import { Water } from "three/addons/objects/Water.js";
 import { makeModel, realLength, bombModel, canisterModel, bargeModel } from "./models.js";
 import { bakeAnimal } from "./animals.js";
+import { drawIcon } from "./icons.js";
+import { iconOf } from "./species.js";
 import { initUnderwater } from "./underwater.js";
 import { fireballMaterial, puffTextures, glareTexture, makeStars, cloudDeck } from "./fx.js";
 import { polarSea, patchWater, updateWaves, etaAt } from "./waves3d.js";
@@ -111,7 +113,7 @@ function glowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-function pinTexture(emoji, ring, selected = false) {
+function pinTexture(name, ring, selected = false) {
   const n = 128, c = document.createElement("canvas");
   c.width = c.height = n;
   const g = c.getContext("2d");
@@ -122,8 +124,7 @@ function pinTexture(emoji, ring, selected = false) {
   g.beginPath(); g.arc(n / 2, n / 2, n * 0.42, 0, Math.PI * 2);
   g.fillStyle = "rgba(15,23,32,0.75)"; g.fill();
   g.lineWidth = n * 0.07; g.strokeStyle = ring; g.stroke();
-  g.font = `${n * 0.48}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
-  g.fillText(emoji, n / 2, n / 2 + n * 0.03);
+  drawIcon(g, name, n / 2, n / 2, n * 0.56, "#fff");
   return new THREE.CanvasTexture(c);
 }
 
@@ -279,7 +280,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       model.traverse((o) => { o.userData.id = r.id; });
       recGroup.add(model);
       const sel = r.id === state.selected;
-      const pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(r.emoji || "•", color, sel), depthTest: false, sizeAttenuation: false }));
+      const pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(iconOf(r), color, sel), depthTest: false, sizeAttenuation: false }));
       pin.scale.setScalar(sel ? 0.058 : 0.045);
       pin.userData.id = r.id;
       pin.layers.set(1);   // pins: drawn for the camera only, not mirrored in the water
@@ -402,7 +403,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
         const r = state.receivers.find((q) => q.id === o.userData.id);
         if (!r) continue;
         o.material.map?.dispose();
-        o.material.map = pinTexture(r.emoji || "•", colorOf(r), r.id === state.selected);
+        o.material.map = pinTexture(iconOf(r), colorOf(r), r.id === state.selected);
         o.scale.setScalar(r.id === state.selected ? 0.058 : 0.045);
         o.material.needsUpdate = true;
       }
@@ -830,13 +831,15 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
 
   // ---------------------------------------------------------------- danger circles (biology/zones.py via /api/zones)
   const zoneGroup = new THREE.Group(); scene.add(zoneGroup);
-  function labelSprite(text, color) {
+  function labelSprite(text, color, ic = null) {
     const c = document.createElement("canvas"); c.width = 512; c.height = 96;
     const g = c.getContext("2d");
     g.font = "600 40px -apple-system, Segoe UI, sans-serif"; g.textBaseline = "middle";
-    const w = Math.min(g.measureText(text).width + 36, 512);
+    const pad = ic ? 62 : 18;
+    const w = Math.min(g.measureText(text).width + pad + 18, 512);
     g.fillStyle = "rgba(10,17,25,0.82)"; g.beginPath(); g.roundRect(0, 8, w, 80, 40); g.fill();
-    g.fillStyle = color; g.fillText(text, 18, 50);
+    if (ic) drawIcon(g, ic, 40, 48, 40, color);
+    g.fillStyle = color; g.fillText(text, pad, 50);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, sizeAttenuation: false }));
     sp.scale.set(0.24, 0.045, 1); sp.center.set(0, 0.5); sp.renderOrder = 12; sp.layers.set(1);
     return sp;
@@ -852,7 +855,7 @@ const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToR
       ring.rotation.x = -Math.PI / 2; ring.position.y = 1.5; ring.renderOrder = 3;
       zoneGroup.add(ring);
       const a = -0.5 - i * 0.35;   // spread the labels around so they do not overlap
-      const lab = labelSprite(z.text, z.color);
+      const lab = labelSprite(z.text, z.color, z.icon);
       lab.position.set(Math.cos(a) * z.r, 8, Math.sin(a) * z.r);
       lab.userData.zoneLabel = true;
       zoneGroup.add(lab);

@@ -29,7 +29,7 @@
 </head>
 <body class="basic">
   <header id="topbar">
-    <div class="brand" title="whatifanukeexplodedunderwater.com"><span class="logo">◎</span> <span class="full">What if a nuke exploded underwater</span><span class="short">What if…</span></div>
+    <div class="brand" title="whatifanukeexplodedunderwater.com"><img class="logo" src="favicon.svg" alt="" width="22" height="22"> <span class="full">What if a nuke exploded underwater</span><span class="short">What if…</span></div>
     <label class="preset" title="Load a ready-made example">
       <select id="presetSel">
         <option value="">Example scenarios…</option>
@@ -41,7 +41,7 @@
       </select>
     </label>
     <span class="spacer"></span>
-    <button id="saveBtn" class="tb" title="Save, open and share scenarios">💾 <span class="tbl">Scenario</span> ▾</button>
+    <button id="saveBtn" class="tb" title="Save, open and share scenarios"><i data-icon="save"></i> <span class="tbl">Scenario</span> ▾</button>
     <button id="exportBtn" class="tb" title="Download a picture or the results">⤓ <span class="tbl">Export</span> ▾</button>
     <span class="divider"></span>
     <div class="seg" id="viewSeg" aria-label="View">
@@ -53,14 +53,14 @@
       <button data-detail="basic" class="classicOnly" title="The older Basic level: the full panels with plain labels">Basic</button>
       <button data-detail="expert" title="Every number, criterion, source, uncertainty setting and caveat (X switches)">Expert</button>
     </div>
-    <button id="muteBtn" class="tb icon" title="Sound on / off (M)" aria-label="Sound on or off">🔊</button>
-    <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset" aria-label="Settings">⚙</button>
+    <button id="muteBtn" class="tb icon" title="Sound on / off (M)" aria-label="Sound on or off"><i data-icon="soundOn"></i></button>
+    <button id="settingsBtn" class="tb icon" title="Settings: units, graphics, reset" aria-label="Settings"><i data-icon="gear"></i></button>
     <button id="helpBtn" class="tb" title="Help, tour and keyboard shortcuts">? <span class="tbl">Help</span> ▾</button>
   </header>
 
   <aside id="controls">
     <details open>
-      <summary>💥 Burst</summary>
+      <summary><i data-icon="burst"></i> Burst</summary>
       <label title="Energy released by the weapon">Yield
         <span class="row"><input id="yield" type="number" min="0.001" step="any" value="20">
           <select id="yieldUnit" title="Kilotons or megatons of TNT"><option value="1">kt</option><option value="1000">Mt</option></select></span>
@@ -77,13 +77,13 @@
     </details>
 
     <details open>
-      <summary>🌊 Sea</summary>
+      <summary><i data-icon="wave"></i> Sea</summary>
       <label class="check" title="Untick to set a water depth (the sea floor appears)"><input id="deepOcean" type="checkbox" checked> Deep open ocean</label>
       <label title="Depth from the surface to the sea floor">Water depth <span class="row"><input id="waterDepth" type="number" min="1" value="200" disabled data-q="m"><span class="unit">m</span></span></label>
     </details>
 
     <details open>
-      <summary>🌤 Conditions</summary>
+      <summary><i data-icon="sunCloud"></i> Conditions</summary>
       <label title="Draw a real place around the burst">Place
         <select id="place"><option value="open">Open sea</option><option value="bikini">Bikini Atoll (Crossroads tests, 1946)</option></select></label>
       <label title="Changes the look; at night the flash blinds people much farther away">Time of day
@@ -102,21 +102,21 @@
     </details>
 
     <details open>
-      <summary>🐟 Things in the sea</summary>
+      <summary><i data-icon="fish"></i> Things in the sea</summary>
       <div class="buttons" id="addButtons">
-        <button data-add="fish" title="Add a fish">🐟 Fish</button>
-        <button data-add="whale" title="Add a whale">🐋 Whale</button>
-        <button data-add="dolphin" title="Add a dolphin">🐬 Dolphin</button>
-        <button data-add="turtle" title="Add a sea turtle">🐢 Turtle</button>
-        <button data-add="diver" title="Add a scuba diver">🤿 Diver</button>
-        <button data-add="boat" title="Add a person on a small boat">🚤 Boat</button>
+        <button data-add="fish" title="Add a fish"><i data-icon="fish"></i> Fish</button>
+        <button data-add="whale" title="Add a whale"><i data-icon="whale"></i> Whale</button>
+        <button data-add="dolphin" title="Add a dolphin"><i data-icon="dolphin"></i> Dolphin</button>
+        <button data-add="turtle" title="Add a sea turtle"><i data-icon="turtle"></i> Turtle</button>
+        <button data-add="diver" title="Add a scuba diver"><i data-icon="diver"></i> Diver</button>
+        <button data-add="boat" title="Add a person on a small boat"><i data-icon="speedboat"></i> Boat</button>
       </div>
       <p class="help">In the technical view, drag them along the cut-away to move them. Select one and press Delete to remove it.</p>
       <ul id="receiverList"></ul>
     </details>
 
     <details id="techViewBox" open>
-      <summary>🔬 Technical view</summary>
+      <summary><i data-icon="chart"></i> Technical view</summary>
       <label title="How far from ground zero the cut-away reaches">Distance shown <span class="row"><input id="maxRange" type="number" min="0.1" step="any" value="3" data-q="km"><span class="unit">km</span></span></label>
       <label title="How deep the cut-away reaches">Depth shown <span class="row"><input id="maxDepth" type="number" min="1" value="100" data-q="m"><span class="unit">m</span></span></label>
       <label class="expert" title="Depths are tiny next to distances, so the water part is stretched">Water view height vs distance <input id="stretch" type="range" min="5" max="100" value="35"> <span id="stretchVal">35%</span></label>

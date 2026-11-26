@@ -4,6 +4,8 @@
 // file only chooses the camera, the playback speed and the wording.
 
 import { esc } from "./ui.js";
+import { icon, drawIcon } from "./icons.js";
+import { iconOf } from "./species.js";
 import { cloudTopM } from "./realistic.js";
 
 const LEVELS = ["none", "possible", "likely", "severe", "lethal"];
@@ -17,16 +19,16 @@ export const BOMBS = [
   { key: "tsar", label: "Tsar Bomba-size", sub: "50 megatons, the largest ever tested", kt: 50000, size: 5 },
 ];
 export const WHERE = [
-  { key: "sky", label: "High in the sky", sub: "an air burst", icon: "☁️" },
-  { key: "surface", label: "On the water", sub: "touching the sea", icon: "🌊" },
-  { key: "under", label: "Underwater", sub: "just below the surface", icon: "🫧" },
+  { key: "sky", label: "High in the sky", sub: "an air burst", icon: "cloud" },
+  { key: "surface", label: "On the water", sub: "touching the sea", icon: "wave" },
+  { key: "under", label: "Underwater", sub: "just below the surface", icon: "bubbles" },
 ];
 // what to put in the sea: [species, distance as a multiple of the scale D, depth (m, negative)]
 export const SEAS = [
-  { key: "fish", label: "A few fish", icon: "🐟", items: [["sardine", 0.6, -8], ["cod", 1.2, -30], ["tuna", 2.4, -20], ["salmon", 4.5, -10]] },
-  { key: "big", label: "Dolphins and whales", icon: "🐬", items: [["dolphin", 0.8, -10], ["shark", 1.4, -15], ["humpback", 2.2, -20], ["orca", 4, -10]] },
-  { key: "boats", label: "Boats and ships", icon: "🚢", items: [["boat", 0.9, 2], ["fishingboat", 1.8, 2], ["destroyer", 3.5, 2]] },
-  { key: "fill", label: "Fill the sea", icon: "🌐", items: [["cod", 0.7, -30], ["diver", 1.0, -10], ["dolphin", 1.3, -10], ["fishingboat", 1.8, 2],
+  { key: "fish", label: "A few fish", icon: "fish", items: [["sardine", 0.6, -8], ["cod", 1.2, -30], ["tuna", 2.4, -20], ["salmon", 4.5, -10]] },
+  { key: "big", label: "Dolphins and whales", icon: "dolphin", items: [["dolphin", 0.8, -10], ["shark", 1.4, -15], ["humpback", 2.2, -20], ["orca", 4, -10]] },
+  { key: "boats", label: "Boats and ships", icon: "ship", items: [["boat", 0.9, 2], ["fishingboat", 1.8, 2], ["destroyer", 3.5, 2]] },
+  { key: "fill", label: "Fill the sea", icon: "globe", items: [["cod", 0.7, -30], ["diver", 1.0, -10], ["dolphin", 1.3, -10], ["fishingboat", 1.8, 2],
     ["shark", 2.4, -15], ["gull", 2.8, 30], ["humpback", 3.2, -20], ["destroyer", 4.5, 2]] },
 ];
 
@@ -96,30 +98,30 @@ export function initSimple(ctx) {
         ${BOMBS.map((b) => `<button class="spCard" data-key="${b.key}"><span class="spBoom s${b.size}"></span><b>${b.label}</b><small>${b.sub}</small></button>`).join("")}
       </div></div></div>
       <div class="spStep"><div class="spNum">2</div><div class="spBody"><h3>Where does it go off?</h3><div class="spCards" data-group="where">
-        ${WHERE.map((w) => `<button class="spCard" data-key="${w.key}"><span class="spIcon">${w.icon}</span><b>${w.label}</b><small>${w.sub}</small></button>`).join("")}
+        ${WHERE.map((w) => `<button class="spCard" data-key="${w.key}"><span class="spIcon">${icon(w.icon)}</span><b>${w.label}</b><small>${w.sub}</small></button>`).join("")}
       </div></div></div>
       <div class="spStep"><div class="spNum">3</div><div class="spBody"><h3>What's in the sea?</h3><div class="spCards" data-group="sea">
-        ${SEAS.map((s) => `<button class="spCard" data-key="${s.key}"><span class="spIcon">${s.icon}</span><b>${s.label}</b></button>`).join("")}
+        ${SEAS.map((s) => `<button class="spCard" data-key="${s.key}"><span class="spIcon">${icon(s.icon)}</span><b>${s.label}</b></button>`).join("")}
       </div></div></div>
-      <div class="spActions"><button class="spGo">💥 Detonate</button><button class="spRandom" title="Pick everything at random">🎲 Surprise me</button></div>
+      <div class="spActions"><button class="spGo">${icon("burst")} Detonate</button><button class="spRandom" title="Pick everything at random">${icon("dice")} Surprise me</button></div>
       </div>
-      <div class="spMore"><button class="spDiveBtn">🌊 Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button><span>·</span><button class="spPrivacyBtn">Privacy</button></div>
+      <div class="spMore"><button class="spDiveBtn">${icon("wave")} Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button><span>·</span><button class="spPrivacyBtn">Privacy</button></div>
       <p class="spNote">Every number comes from published science (Glasstone &amp; Dolan, the U.S. Navy and others).
         Distances and sizes are to scale; the bursts are hypothetical.
-        The explosion has a bright flash: you can soften it in Settings (⚙).</p>
+        The explosion has a bright flash: you can soften it in Settings (${icon("gear")}).</p>
     </div>
     <div class="spCount" hidden><div class="spCountNum"></div><div class="spFact"></div></div>
     <div class="spCaption" hidden></div>
     <div class="spBar" hidden>
-      <button class="spReplay" title="Watch it again">↺ Replay</button>
-      <button class="spPause" title="Pause / continue (Space)">⏸ Pause</button>
+      <button class="spReplay" title="Watch it again">${icon("replay")} Replay</button>
+      <button class="spPause" title="Pause / continue (Space)">${icon("pause")} Pause</button>
       <span class="spSpeed" title="How fast the film plays"><button data-sp="0.6">Slower</button><button data-sp="1" class="on">Normal</button><button data-sp="1.6">Faster</button></span>
-      <button class="spSkip" title="Jump to the results">Skip to results ⏭</button>
-      <button class="spNew" title="Choose a different bomb or sea">✎ Change setup</button>
+      <button class="spSkip" title="Jump to the results">Skip to results ${icon("skip")}</button>
+      <button class="spNew" title="Choose a different bomb or sea">${icon("edit")} Change setup</button>
     </div>
     <div class="spLook" hidden></div>
     <div class="spResults" hidden><div class="spResHead"><h2>What happened</h2><button class="spResClose" title="Hide">✕</button></div><div class="spResBody"></div>
-      <div class="spResFoot"><button class="spShare">📤 Share</button><button class="spReplay2">↺ Replay</button><button class="spNew2">✎ Try something else</button><button class="spExpert">🔬 See all the numbers</button></div></div>`;
+      <div class="spResFoot"><button class="spShare">${icon("share")} Share</button><button class="spReplay2">${icon("replay")} Replay</button><button class="spNew2">${icon("edit")} Try something else</button><button class="spExpert">${icon("chart")} See all the numbers</button></div></div>`;
   main.appendChild(el);
   const q = (s) => el.querySelector(s);
   const choice = { bomb: "hiroshima", where: "under", sea: "fill" };   // underwater first: it is the site's question
@@ -166,7 +168,7 @@ export function initSimple(ctx) {
     setupScene();
     ctx.timeline.pause(); ctx.timeline.setTime(0);
     show("count");
-    q(".spFact").textContent = "💡 " + FACTS[Math.floor(Math.random() * FACTS.length)];
+    q(".spFact").innerHTML = icon("bulb") + " " + esc(FACTS[Math.floor(Math.random() * FACTS.length)]);
     let n = 3;
     const step = () => {
       q(".spCountNum").textContent = n || "";
@@ -177,7 +179,7 @@ export function initSimple(ctx) {
         // static website, first visit: Python and the physics are still downloading (a few MB, once)
         const ps = ctx.physicsState?.();
         if (ps && ps.local && !ps.ready && !ps.error) {
-          if (!told) { told = true; q(".spCountNum").textContent = "⏳"; q(".spFact").textContent = "Getting the physics ready… (only on your first visit: it runs right here in your browser)"; }
+          if (!told) { told = true; q(".spCountNum").innerHTML = icon("hourglass"); q(".spFact").textContent = "Getting the physics ready… (only on your first visit: it runs right here in your browser)"; }
           t0 = performance.now();   // the clock for "no answer" starts once it is ready
           setTimeout(wait, 150);
           return;
@@ -310,7 +312,7 @@ export function initSimple(ctx) {
     }
     const end = Math.max(bz >= 0 ? 600 : 300, beats[beats.length - 1].t * 1.3);
     film = { simT: beats[0].t, lastSet: null, beats, k: -1, elapsed: 0, end, camLocked: false, paused: false };
-    q(".spPause").textContent = "⏸ Pause";
+    q(".spPause").innerHTML = icon("pause") + " Pause";
     show("film");
     // the lead-in: the bomb falling (above water) or hanging on its cable (underwater), then the flash
     const depth = Math.round(-bz);
@@ -399,9 +401,9 @@ export function initSimple(ctx) {
       const dist = fmtKm(Math.hypot(r.x_m, r.y_m || 0));
       const col = lvl === null ? "#9aa8b6" : LEVEL_COLORS[lv];
       const details = a.effects.map((e) => `<li><span class="level lv-${e.level}">${e.level}</span> ${esc(e.name)}: ${esc(e.value)}</li>`).join("");
-      return `<div class="spRes" style="--c:${col}"><div class="spResTop"><span class="spEmoji">${esc(r.emoji)}</span>
+      return `<div class="spRes" style="--c:${col}"><div class="spResTop"><span class="spEmoji">${icon(iconOf(r))}</span>
         <div><b>${esc(r.label.replace(/ \d+$/, ""))}</b> <small>${dist} away${r.z_m < 0 ? `, ${Math.round(-r.z_m)} m deep` : r.kind === "bird" ? `, ${Math.round(r.z_m)} m up` : ""}</small>
-        <div class="spVerdict">${verdict}</div></div><button class="spView" data-id="${esc(r.id)}" title="Point the camera at it">👁 View</button></div>
+        <div class="spVerdict">${verdict}</div></div><button class="spView" data-id="${esc(r.id)}" title="Point the camera at it">${icon("eye")} View</button></div>
         ${lvl === null ? "" : `<div class="spWhy">${esc(why.charAt(0).toUpperCase() + why.slice(1))}.</div>
         <details><summary>Why? The numbers</summary><ul>${details}</ul></details>`}</div>`;
     }).join("");
@@ -410,12 +412,12 @@ export function initSimple(ctx) {
     let zoneHtml = "";
     if (zs && showing === "results") {
       const by = Object.fromEntries(zs.map((z) => [z.key, z.farthest_m]));
-      const line = (icon, what, r) => (r ? `<div>${icon} ${what} out to <b>${fmtKm(r)}</b></div>` : "");
+      const line = (ic, what, r) => (r ? `<div>${icon(ic)} ${what} out to <b>${fmtKm(r)}</b></div>` : "");
       zoneHtml = `<div class="spZones"><h3>How far the danger reached</h3>` +
-        line("🐟", "Fish killed", by.fish_bladder?.lethal) + line("🐬", "Dolphins badly hurt", by.dolphin?.severe) +
-        line("🐋", "Whales badly hurt", by.whale?.severe) + line("🤿", "Divers killed", by.diver?.lethal) +
-        line("🧍", "People on deck killed", by.person?.lethal) + line("🤕", "People on deck injured", by.person?.likely) +
-        line("🚢", "Ships wrecked", by.destroyer?.severe) +
+        line("fish", "Fish killed", by.fish_bladder?.lethal) + line("dolphin", "Dolphins badly hurt", by.dolphin?.severe) +
+        line("whale", "Whales badly hurt", by.whale?.severe) + line("diver", "Divers killed", by.diver?.lethal) +
+        line("person", "People on deck killed", by.person?.lethal) + line("injured", "People on deck injured", by.person?.likely) +
+        line("ship", "Ships wrecked", by.destroyer?.severe) +
         `<label class="check"><input type="checkbox" class="spZoneToggle" ${ctx.zonesShown() ? "checked" : ""}> Draw these as circles on the sea</label></div>`;
     }
     body.innerHTML = zoneHtml + compareHtml() + (cards || `<p class="help">Working it out…</p>`);
@@ -430,7 +432,7 @@ export function initSimple(ctx) {
     const L = [];
     if (d?.fireball && sc.burst.z_m >= 0) {
       const D = 2 * d.fireball.max_radius_m;
-      L.push(`🔥 The fireball was ${fmtKm(D)} across: wider than ${Math.max(1, Math.round(D / 105))} football pitches laid end to end.`);
+      L.push(["fire", `The fireball was ${fmtKm(D)} across: wider than ${Math.max(1, Math.round(D / 105))} football pitches laid end to end.`]);
     }
     if (sc.burst.z_m >= 0) {
       const top = cloudTopM(y);
@@ -438,28 +440,28 @@ export function initSimple(ctx) {
       const cmp = top >= 11000 ? `${everest(top)}, and higher than airliners fly`
         : top >= 8849 ? `higher than Mount Everest (8.8 km)`
         : `${(top / 828).toFixed(top < 2000 ? 1 : 0)} times the height of the world's tallest building (828 m)`;
-      L.push(`☁️ The cloud rose about ${fmtKm(top)}: ${cmp}.`);
+      L.push(["cloud", `The cloud rose about ${fmtKm(top)}: ${cmp}.`]);
     } else {
       // Only scale the BAKER column (20 kt, 1946) to bombs of a similar size: the largest underwater nuclear tests
       // were about 30 kt (BAKER, WIGWAM). Far beyond that, how high the water goes is simply not known.
       const k = Math.cbrt(y / 20), vent = (-sc.burst.z_m * 3.28084 / Math.cbrt(y)) < 35;
-      if (y <= COLUMN_MAX_KT) L.push(`🌊 A column of water about ${fmtKm((vent ? 1830 : 270) * k)} high shot out of the sea (scaled from the 1946 BAKER test).`);
-      else L.push(`🌊 How high the water would be thrown is not known: no bomb this big has ever gone off underwater. The largest underwater tests were about 30 kilotons; at 1946's BAKER test the column of water was about 1.8 km high.`);
+      if (y <= COLUMN_MAX_KT) L.push(["wave", `A column of water about ${fmtKm((vent ? 1830 : 270) * k)} high shot out of the sea (scaled from the 1946 BAKER test).`]);
+      else L.push(["wave", `How high the water would be thrown is not known: no bomb this big has ever gone off underwater. The largest underwater tests were about 30 kilotons; at 1946's BAKER test the column of water was about 1.8 km high.`]);
     }
     const fish = by.fish_bladder?.lethal;
     if (fish) {
       const a = Math.PI * fish * fish / 1e6;
-      L.push(`🐟 Fish were killed across ${a < 1 ? a.toFixed(2) : Math.round(a)} km² of sea${a > 6 ? `: about ${(a / 59).toFixed(a > 59 ? 0 : 1)} times the area of Manhattan` : ""}.`);
+      L.push(["fish", `Fish were killed across ${a < 1 ? a.toFixed(2) : Math.round(a)} km² of sea${a > 6 ? `: about ${(a / 59).toFixed(a > 59 ? 0 : 1)} times the area of Manhattan` : ""}.`]);
     }
     const hurt = by.person?.likely;
-    if (hurt) L.push(`🧍 People out in the open were injured up to ${fmtKm(hurt)} away: ${hurt >= 2737
-      ? `${(hurt / 2737).toFixed(1)} times the length of the Golden Gate Bridge` : `about ${Math.max(1, Math.round(hurt / 105))} football pitches end to end`}.`);
+    if (hurt) L.push(["person", `People out in the open were injured up to ${fmtKm(hurt)} away: ${hurt >= 2737
+      ? `${(hurt / 2737).toFixed(1)} times the length of the Golden Gate Bridge` : `about ${Math.max(1, Math.round(hurt / 105))} football pitches end to end`}.`]);
     return L;
   }
   function compareHtml() {
     if (showing !== "results") return "";
     const L = compareLines();
-    return L.length ? `<div class="spCompare"><h3>In real-world terms</h3>${L.map((l) => `<div>${esc(l)}</div>`).join("")}</div>` : "";
+    return L.length ? `<div class="spCompare"><h3>In real-world terms</h3>${L.map(([ic, l]) => `<div>${icon(ic)} ${esc(l)}</div>`).join("")}</div>` : "";
   }
 
   // ---------------------------------------------------------------- share: a picture + a link that sets up the same burst
@@ -481,7 +483,7 @@ export function initSimple(ctx) {
     g.fillStyle = "#232846"; g.font = "800 46px -apple-system, Segoe UI, sans-serif";
     g.fillText(`${b.label} bomb, ${w.label.toLowerCase()}`, 48, 430);
     g.font = "600 26px -apple-system, Segoe UI, sans-serif";
-    compareLines().slice(1, 4).forEach((l, i) => g.fillText(l.length > 80 ? l.slice(0, 78) + "…" : l, 48, 480 + i * 38));
+    compareLines().slice(1, 4).forEach(([ic, l], i) => { drawIcon(g, ic, 62, 480 + i * 38, 26, "#232846"); g.fillText(l.length > 76 ? l.slice(0, 74) + "…" : l, 84, 480 + i * 38); });
     g.fillStyle = "#ff5a3a"; g.font = "700 22px -apple-system, Segoe UI, sans-serif";
     g.fillText("whatifanukeexplodedunderwater.com", 48, 602);
     const blob = await new Promise((res) => c.toBlob(res, "image/png"));
@@ -514,11 +516,11 @@ export function initSimple(ctx) {
   }
   function renderLook(active = null) {
     const box = q(".spLook");
-    const chips = ctx.state.receivers.map((r) => `<button data-id="${esc(r.id)}" class="${active === r.id ? "on" : ""}" title="Look at the ${esc(r.label.replace(/ \d+$/, "").toLowerCase())}">${esc(r.emoji)} ${esc(r.label.replace(/ \d+$/, ""))}</button>`).join("");
+    const chips = ctx.state.receivers.map((r) => `<button data-id="${esc(r.id)}" class="${active === r.id ? "on" : ""}" title="Look at the ${esc(r.label.replace(/ \d+$/, "").toLowerCase())}">${icon(iconOf(r))} ${esc(r.label.replace(/ \d+$/, ""))}</button>`).join("");
     box.innerHTML = `<span class="lbl">Look at</span>` +
-      (showing === "film" ? `<button data-id="_auto" class="${film && !film.camLocked ? "on" : ""}" title="Let the film choose the shots">🎬 Auto</button>` : "") +
-      `<button data-id="_burst" class="${active === "_burst" ? "on" : ""}">💥 The explosion</button>` +
-      `<button data-id="_school" class="${active === "_school" ? "on" : ""}" title="A shoal of fish near the edge of the killing zone">🐠 School of fish</button>` + chips;
+      (showing === "film" ? `<button data-id="_auto" class="${film && !film.camLocked ? "on" : ""}" title="Let the film choose the shots">${icon("film")} Auto</button>` : "") +
+      `<button data-id="_burst" class="${active === "_burst" ? "on" : ""}">${icon("burst")} The explosion</button>` +
+      `<button data-id="_school" class="${active === "_school" ? "on" : ""}" title="A shoal of fish near the edge of the killing zone">${icon("school")} School of fish</button>` + chips;
     box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => (b.dataset.id === "_auto" ? autoCamera() : lookAt(b.dataset.id))));
   }
 
@@ -526,7 +528,7 @@ export function initSimple(ctx) {
   q(".spPause").addEventListener("click", () => {
     if (!film) return;
     film.paused = !film.paused;
-    q(".spPause").textContent = film.paused ? "▶ Continue" : "⏸ Pause";
+    q(".spPause").innerHTML = film.paused ? icon("play") + " Continue" : icon("pause") + " Pause";
   });
   el.querySelectorAll(".spSpeed button").forEach((b) => b.addEventListener("click", () => {
     speed = +b.dataset.sp;

@@ -50,7 +50,7 @@ kbd {
   background: linear-gradient(180deg, #132232, #0e1823); border-bottom: 1px solid var(--line);
 }
 .brand { font-weight: 700; font-size: 17px; letter-spacing: .01em; white-space: nowrap; }
-.brand .logo { color: var(--accent); margin-right: 2px; }
+.brand .logo { width: 22px; height: 22px; vertical-align: -5px; margin-right: 4px; border-radius: 6px; }
 .brand .tag { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
 .preset { margin: 0 0 0 14px; }
 .preset select { width: 270px; }
@@ -72,11 +72,11 @@ aside { overflow-y: auto; padding: 10px 14px 18px; scrollbar-width: thin; scroll
 details { border-bottom: 1px solid var(--line); padding: 4px 0 10px; }
 summary {
   cursor: pointer; list-style: none; font-weight: 600; font-size: 13px; padding: 7px 0; user-select: none;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 8px;
 }
 summary:hover { color: #fff; }
 summary::-webkit-details-marker { display: none; }
-summary::after { content: "▾"; color: var(--muted); transition: transform .15s; }
+summary::after { content: "▾"; color: var(--muted); transition: transform .15s; margin-left: auto; }
 details:not([open]) > summary::after { transform: rotate(-90deg); }
 h2 { font-size: 15px; margin: 0; }
 h3 { font-size: 13px; margin: 14px 0 6px; }
@@ -649,3 +649,14 @@ button:focus-visible, .spCard:focus-visible, a:focus-visible, input[type="checkb
 /* links inside the dark pop-up cards (privacy note) */
 .modal .card a { color: #8fd0ff; text-decoration: underline; text-underline-offset: 2px; }
 .modal .card a:hover { color: #c3e6ff; }
+
+/* ================================================================ the site's own icons (icons.js) */
+.ic { width: 1.2em; height: 1.2em; vertical-align: -0.24em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.ic .icF { fill: currentColor; fill-opacity: .2; stroke: none; }
+.ic .icB { fill: currentColor; stroke: none; }
+.spIcon .ic { width: 1.5em; height: 1.5em; color: #2f6f9f; }
+.spCard.on .spIcon .ic, .spCard[aria-pressed="true"] .spIcon .ic { color: #e2552f; }
+.spEmoji .ic { width: 30px; height: 30px; color: var(--c, #2f6f9f); }
+.spFact .ic { color: #f0b429; }
+.spGo .ic { width: 1.15em; height: 1.15em; }
+.menu .mi .ic { width: 17px; height: 17px; vertical-align: -3px; }
