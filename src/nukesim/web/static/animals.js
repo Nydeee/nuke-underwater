@@ -56,6 +56,11 @@ const SPECIES = {
   green:       ["turtle"],
   loggerhead:  ["turtle", { Mat: 0x9a5a2c, WhiteShell: 0xe0c28f, GreenSkin: 0xa08a64 }],
   leatherback: ["turtle", { Mat: 0x26292e, Brown: 0x1e2226, WhiteShell: 0x30353b, GreenSkin: 0x2a2e33 }],
+  // deep-sea animals for "Dive into the deep" (dive.js): look-alikes built from the models above
+  lantern:     ["fish", { Top: 0x1c2740, Bottom: 0x8f9db8, Fins: 0x2c3a58 }],
+  grenadier:   ["fish", { Top: 0x6a6e77, Bottom: 0xb7bac2, Fins: 0x50545c }],
+  angler:      ["fish_deep", { Body: 0x6b5443, Stripes: 0x3f3027, Outline: 0x2a201a }],
+  beaked:      ["dolphin", { "*": 0xb39c82 }],
   gull:        ["gull"],
   tern:        ["gull", { "*": 0xf4f6f8 }],
   frigatebird: ["gull_dark", { "*": 0x3a3d44 }],

@@ -554,41 +554,72 @@ body.simple .tl-rail { background: rgba(35,40,70,.15); }
 @keyframes goPulse { 50% { transform: scale(1.06); box-shadow: 0 8px 36px rgba(255,90,58,.7); } }
 
 /* ================================================================ Dive into the deep (dive.js) */
-#dive { position: fixed; inset: 0; z-index: 40; --depthDark: 0; color: #fff;
-  background: linear-gradient(180deg, #a8dcf2 0%, #3f9cc8 18%, #145f8c 40%, #062b47 65%, #020c16 100%); }
+#dive { position: fixed; inset: 0; z-index: 40; color: #fff; background: #0b3a5c; --c: #7c8aa5; }
 #dive[hidden] { display: none; }
-#dive::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: rgba(1,6,12,calc(var(--depthDark) * .55)); z-index: 0; }
-.dvTop { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 10px 16px;
-  background: rgba(255,255,255,.9); color: #232846; backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,.12); }
-.dvTop button { background: #232846; color: #fff; border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; }
-.dvWhat { font-size: 15px; }
-.dvDist { display: flex; align-items: center; gap: 10px; margin: 0 0 0 auto; color: #5b6180; font-weight: 600; }
-.dvDist input { width: min(260px, 40vw); accent-color: #ff5a3a; }
-.dvDist b { color: #232846; min-width: 56px; }
-.dvMeter { position: absolute; left: 16px; top: 50%; z-index: 3; transform: translateY(-50%); font: 800 22px/1 ui-monospace, Menlo, monospace;
-  color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.5); background: rgba(0,0,0,.18); padding: 8px 12px; border-radius: 12px; }
-.dvScroll { position: absolute; inset: 0; overflow-y: auto; z-index: 1; }
-.dvPage { position: relative; max-width: 760px; margin: 0 auto; }
-.dvTitle { position: absolute; left: 0; right: 0; text-align: center; color: #232846; }
-.dvTitle h1 { font-size: clamp(30px, 6vw, 54px); margin: 0 0 8px; font-weight: 800; letter-spacing: -.02em; }
-.dvTitle p { font-size: 17px; color: #14324c; margin: 0 20px; text-shadow: 0 0 12px rgba(255,255,255,.6); }
-.dvItem { position: absolute; left: 90px; right: 16px; display: flex; gap: 14px; align-items: center; transform: translateY(-50%); --c: #888; }
-.dvEmoji { font-size: 56px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.35)); }
-.dvText { background: rgba(255,255,255,.93); color: #232846; border-radius: 16px; padding: 10px 14px; border-left: 6px solid var(--c); max-width: 460px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-.dvText small { color: #5b6180; font-weight: 600; }
-.dvVerdict { font-weight: 800; font-size: 17px; margin-top: 2px; }
-.dvWhy { font-size: 14px; }
-.dvNote { font-size: 12.5px; color: #5b6180; margin-top: 4px; }
-.dvZone { position: absolute; left: 90px; right: 16px; border-top: 1px dashed rgba(255,255,255,.35); color: rgba(255,255,255,.7); font-size: 12px; padding-top: 4px; }
-.dvFloor { position: absolute; left: 0; right: 0; height: 420px; text-align: center; color: #d8c9a8; padding-top: 40px;
-  background: linear-gradient(180deg, rgba(92,74,52,0) 0, rgba(92,74,52,.9) 60px, #3b2f22 100%); border-radius: 40% 40% 0 0 / 60px 60px 0 0; }
-.dvFloor p { color: rgba(255,255,255,.7); }
+.dvGl { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - var(--dvTop, 0px)); display: block; z-index: 0; }
+.dvTop { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 16px;
+  background: rgba(8,22,38,.82); color: #e6f2fb; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,.08); }
+.dvTop button { background: #fff; color: #0d2236; border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; }
+.dvTop select { width: auto; background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 5px 10px; font-weight: 600; }
+.dvTop select option { color: #0d2236; }
+.dvDist { display: flex; align-items: center; gap: 10px; margin: 0 0 0 auto; color: #a9c3d8; font-weight: 600; }
+.dvDist input { width: min(260px, 40vw); accent-color: #ff6a45; }
+.dvDist b { color: #fff; min-width: 56px; }
+.dvScroll { position: absolute; inset: 0; overflow-y: auto; z-index: 1; overscroll-behavior: contain; }
+.dvPage { position: relative; max-width: 980px; margin: 0 auto; }
+.dvTitle { position: absolute; left: 0; right: 0; text-align: center; color: #0f2c45; padding: 0 20px 0 150px; }
+.dvTitle h1 { font-size: clamp(34px, 6.4vw, 64px); margin: 0 0 10px; font-weight: 800; letter-spacing: -.025em; }
+.dvTitle p { font-size: 17px; color: #1d3f5c; margin: 0 auto; max-width: 560px; }
+.dvHint { font-size: 14px !important; color: #18405f !important; background: rgba(255,255,255,.6); display: inline-block; padding: 7px 14px; border-radius: 14px; margin-top: 14px !important; }
+.dvCue { position: absolute; left: 150px; right: 0; text-align: center; color: #1d4b6e; font-weight: 700; font-size: 14px; letter-spacing: .04em; transition: opacity .4s; }
+.dvCue span { display: block; font-size: 24px; animation: dvBob 1.6s ease-in-out infinite; }
+@keyframes dvBob { 50% { transform: translateY(8px); } }
+.dvItem { position: absolute; left: 150px; right: 16px; display: flex; gap: 20px; align-items: center; transform: translateY(-50%); }
+.dvModel { flex: 1 1 46%; height: 220px; min-width: 0; }
+.dvText { flex: 0 1 420px; background: rgba(6,18,32,.62); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 14px 18px 14px 18px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 14px 40px rgba(0,0,0,.3); border-left: 5px solid var(--c); transition: border-color .3s; }
+.dvHead b { font-size: 19px; display: block; }
+.dvHead small { color: #9fbbd0; font-weight: 600; font-size: 13px; }
+.dvVerdict { display: inline-block; margin: 9px 0 6px; padding: 4px 12px; border-radius: 999px; font-weight: 800; font-size: 15px; background: var(--c); color: #fff; transition: background .3s; }
+.dvItem.busy .dvVerdict, .dvItem.busy .dvWhy { opacity: .5; }
+.dvWhy { font-size: 14.5px; line-height: 1.4; color: #e8f1f8; }
+.dvNote { font-size: 13px; color: #9fbbd0; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+.dvZone { position: absolute; left: 150px; right: 16px; border-top: 1px dashed rgba(190,225,255,.3); }
+.dvZone span { display: inline-block; margin-top: 6px; color: rgba(205,230,250,.8); font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.dvFloor { position: absolute; left: 150px; right: 16px; text-align: center; color: #e9dcc0; }
+.dvFloor b { font-size: 22px; }
+.dvFloor p { color: rgba(240,230,210,.8); max-width: 520px; margin: 8px auto 16px; }
+.dvFloor button { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 8px 18px; font-weight: 700; }
+/* the depth gauge on the left */
+.dvGauge { position: absolute; left: 14px; top: 0; bottom: 0; margin: auto 0; height: fit-content; width: 120px; z-index: 3; pointer-events: none; display: flex; flex-direction: column; gap: 14px;
+  background: rgba(6,18,32,.66); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 16px 0 10px 14px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.dvTrack { position: relative; width: 6px; height: min(40vh, 340px); border-radius: 3px; margin-left: 4px; }
+.dvBand { position: absolute; left: 0; width: 6px; background: #5fc3ea; border-radius: 3px 3px 0 0; }
+.dvBand.tw { background: #2a6c9c; border-radius: 0; } .dvBand.mid { background: #17324f; border-radius: 0 0 3px 3px; }
+.dvTrack span { position: absolute; left: 14px; transform: translateY(-50%); font-size: 11px; font-weight: 700; color: rgba(220,238,250,.75); letter-spacing: .03em; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.dvMark { position: absolute; left: -5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transform: translateY(-50%); box-shadow: 0 0 0 4px rgba(255,255,255,.25), 0 2px 8px rgba(0,0,0,.5); }
+.dvBurst { position: absolute; left: 14px; transform: translateY(-50%); font-style: normal; font-size: 10.5px; font-weight: 800; color: #ffb199; white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.dvBurst::before { content: ""; position: absolute; left: -19px; top: 50%; width: 12px; height: 2px; background: #ff6a45; }
+.dvRead { display: flex; flex-direction: column; gap: 2px; padding-right: 8px; }
+.dvDepth { font: 800 22px/1.1 ui-monospace, Menlo, monospace; }
+.dvRead span { font-size: 11px; line-height: 1.3; color: #b4cde0; }
 @media (max-width: 700px) {
-  .dvMeter { left: 8px; font-size: 16px; padding: 6px 8px; }
-  .dvTitle { padding: 0 8px 0 64px; }   /* clear of the depth meter on the left */
-  .dvItem { left: 70px; }
-  .dvEmoji { font-size: 40px; }
-  .dvDist { margin: 0; width: 100%; }
+  .dvTitle, .dvCue { padding: 0 16px; left: 0; }
+  .dvItem, .dvZone, .dvFloor { left: 12px; right: 12px; }
+  .dvItem { flex-direction: column; gap: 6px; }
+  .dvModel { flex: none; width: 100%; height: 130px; }
+  .dvText { flex: none; width: 100%; padding: 12px 14px; }
+  .dvGauge { top: auto !important; bottom: 12px; left: 12px; width: auto; height: auto; margin: 0; padding: 6px 10px; border-radius: 12px; }
+  .dvTrack { display: none; }
+  .dvRead { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; max-width: calc(100vw - 44px); padding: 0; }
+  .dvDepth { font-size: 17px; }
+  .dvRead .dvTemp { display: none; }
+  .dvDist { margin: 0; flex: 1 1 100%; gap: 8px; }
+  .dvDist input { flex: 1; width: auto; }
+  .dvLong { display: none; }
+  .dvTop { gap: 8px; padding: 8px 12px; }
+  .dvTop button, .dvTop select { padding: 5px 10px; font-size: 14px; }
+  .dvTop select { max-width: 40vw; }
 }
 
 @media (pointer: coarse) { #camBar .free, #camBar .free + .lookMenu kbd, .menu kbd { display: none; } }
@@ -606,8 +637,6 @@ body.simple #topbar { background: #f4f7fb; }
   background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.96) 35%); }
 @media (max-width: 700px) { .spActions { margin: 4px -12px -12px; bottom: -12px; } }
 
-.dvTop select { width: auto; background: #fff; color: #232846; border: 1px solid rgba(35,40,70,.2); border-radius: 999px; padding: 5px 10px; font-weight: 600; }
-.dvHint { font-size: 14px !important; color: #23476a !important; background: rgba(255,255,255,.7); display: inline-block; padding: 6px 12px; border-radius: 12px; margin-top: 10px !important; }
 
 .brand .short { display: none; }
 @media (max-width: 1250px) { body:not(.simple) .brand .full { display: none; } body:not(.simple) .brand .short { display: inline; } }

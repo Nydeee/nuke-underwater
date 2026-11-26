@@ -1309,6 +1309,7 @@ const nextFrame = location.search.includes("pump") ? (cb) => setTimeout(() => cb
   tickHumans(dt, now);
   tickAnimals(dt, now);
   if (detail === "simple") simple.update(dt);
+  if (dive?.isOpen()) { dive.frame(now); return; }   // "Dive into the deep" covers the screen: draw only that
   if (mode === "realistic") { realistic.update(); renderer.render(realistic.scene, realistic.camera); }
   else { if (controls.enabled) { techTween.update(); controls.update(); } renderer.render(scene, camera); }
 })();
