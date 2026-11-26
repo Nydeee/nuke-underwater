@@ -1167,6 +1167,7 @@ $("resetPrefs").addEventListener("click", () => {
 });
 $("settingsBtn").addEventListener("click", () => openModal("settingsModal"));
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeModal(b.dataset.close)));
+document.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => { b.closest(".modal").hidden = true; openModal(b.dataset.open); }));
 document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) m.hidden = true; }));
 $("helpClose").addEventListener("click", () => { closeModal("helpModal"); store.set("helpSeen", 1); });
 $("tourStart").addEventListener("click", startTour);
@@ -1277,6 +1278,7 @@ simple = initSimple({
   },
   openDive: (choice) => { dive ??= createDive({ api, toast }); dive.open(choice); },
   openAbout: () => openModal("aboutModal"),
+  openPrivacy: () => openModal("privacyModal"),
   getZones: () => state.zones,
   setZonesShown: (on) => { prefs.zones = on; savePrefs(); $("showZones").checked = on; renderZones(); },
   zonesShown: () => prefs.zones,

@@ -645,3 +645,7 @@ body.simple #topbar { background: #f4f7fb; }
 /* keyboard users: a clear ring around whatever has focus (mouse clicks do not show it) */
 button:focus-visible, .spCard:focus-visible, a:focus-visible, input[type="checkbox"]:focus-visible { outline: 3px solid #2f7fd8 !important; outline-offset: 2px; }
 
+
+/* links inside the dark pop-up cards (privacy note) */
+.modal .card a { color: #8fd0ff; text-decoration: underline; text-underline-offset: 2px; }
+.modal .card a:hover { color: #c3e6ff; }

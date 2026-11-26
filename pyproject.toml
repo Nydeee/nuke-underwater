@@ -2,6 +2,7 @@
 name = "nukesim"
 version = "0.1.0"
 description = "Accuracy-first simulator of nuclear detonation effects in and on water"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",

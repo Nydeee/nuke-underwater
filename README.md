@@ -56,3 +56,9 @@ generated from the simulator code itself.
 ```bash
 uv run python scripts/build_guide.py   # writes output/guide.pdf
 ```
+
+## Licence
+The simulator's own code is released under the [MIT licence](LICENSE). Bundled third-party parts keep
+their own licences: three.js and cannon-es (MIT, see `src/nukesim/web/static/vendor/*/LICENSE`), the 3D
+models (CC0 and CC-BY 3.0; authors are credited in the app's "How does this work?" box) and the
+Bikini Atoll outline (© OpenStreetMap contributors, ODbL).

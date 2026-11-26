@@ -103,7 +103,7 @@ export function initSimple(ctx) {
       </div></div></div>
       <div class="spActions"><button class="spGo">💥 Detonate</button><button class="spRandom" title="Pick everything at random">🎲 Surprise me</button></div>
       </div>
-      <div class="spMore"><button class="spDiveBtn">🌊 Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button></div>
+      <div class="spMore"><button class="spDiveBtn">🌊 Dive into the deep</button><span>·</span><button class="spAboutBtn">How does this work?</button><span>·</span><button class="spPrivacyBtn">Privacy</button></div>
       <p class="spNote">Every number comes from published science (Glasstone &amp; Dolan, the U.S. Navy and others).
         Distances and sizes are to scale; the bursts are hypothetical.
         The explosion has a bright flash: you can soften it in Settings (⚙).</p>
@@ -541,6 +541,7 @@ export function initSimple(ctx) {
   });
   q(".spDiveBtn").addEventListener("click", () => ctx.openDive?.(choice));
   q(".spAboutBtn").addEventListener("click", () => ctx.openAbout?.());
+  q(".spPrivacyBtn").addEventListener("click", () => ctx.openPrivacy?.());
   const replay = () => { ctx.sound.unlock(); ctx.timeline.pause(); ctx.timeline.setTime(0); film ? startFilm(ctx.timeline.getData()) : detonate(); };
   q(".spReplay").addEventListener("click", replay);
   q(".spReplay2").addEventListener("click", replay);
